@@ -1361,7 +1361,7 @@ function quickDue(when) {
   if (when === 'today') { if (d.getHours() < 17) d.setHours(17, 0, 0, 0); else d.setTime(d.getTime() + 3600000); }   // later today
   else if (when === 'tomorrow') { d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0); }
   else if (when === 'nextday') { d.setDate(d.getDate() + 2); d.setHours(9, 0, 0, 0); }
-  else if (when === 'daily') { d.setHours(9, 0, 0, 0); if (d.getTime() <= Date.now()) d.setDate(d.getDate() + 1); }   // first occurrence
+  else if (when === 'daily') { d.setHours(9, 0, 0, 0); }   // today's 9am — if already past, it's due NOW (glows until you open Notes), then rolls to tomorrow
   return d.getTime();
 }
 function refreshQuickBtns() { const q = $('note-quick'); if (q) [...q.children].forEach(b => b.classList.toggle('active', b.getAttribute('data-when') === 'daily' && _editRepeat === 'daily')); }
@@ -1389,9 +1389,10 @@ function saveNoteFromEditor() {
   const repeat = due ? _editRepeat : null;   // repeat only applies when there's a reminder time
   if (!title && !body) { closeNoteEditor(); renderNotes(); return; }
   let n = notesData.notes.find(x => x.id === editingNoteId);
-  if (n) { if (n.due !== due) n.notified = false; n.title = title; n.body = body; n.due = due; n.priority = prio; n.repeat = repeat; }
-  else { n = { id: noteId(), tab: notesData.activeTab, title: title, body: body, due: due, notified: false, priority: prio, repeat: repeat }; notesData.notes.push(n); }
-  saveNotes(); closeNoteEditor(); renderNotes(); checkReminders();
+  if (n) { n.title = title; n.body = body; n.due = due; n.priority = prio; n.repeat = repeat; }
+  else { n = { id: noteId(), tab: notesData.activeTab, title: title, body: body, due: due, priority: prio, repeat: repeat }; notesData.notes.push(n); }
+  n.notified = !!(due && due <= Date.now());   // a reminder set for a time already passed → glows now, but no instant pop-up (you just made it)
+  saveNotes(); closeNoteEditor(); renderNotes(); updateNotesGlow();
 }
 function deleteNote(id) { notesData.notes = notesData.notes.filter(n => n.id !== id); saveNotes(); closeNoteEditor(); renderNotes(); updateNotesGlow(); }
 function openNotesPanel() { settings.classList.add('hidden'); if ($('list-panel')) $('list-panel').classList.add('hidden'); closeNoteEditor(); $('notes-panel').classList.remove('hidden'); renderNotes(); acknowledgeReminders(); }
