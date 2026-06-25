@@ -124,6 +124,7 @@ body{
   border:none; background:transparent; color:var(--ink-faint); cursor:pointer;
   width:28px; height:28px; border-radius:7px; font-size:17px; line-height:1; transition:.15s;
   display:inline-flex; align-items:center; justify-content:center;
+  -webkit-app-region:no-drag;   /* always clickable, even when a panel overlaps the titlebar drag region */
 }
 .iconbtn:hover{background:rgba(var(--teal-rgb),.1); color:var(--teal)}
 
@@ -164,7 +165,7 @@ body.fullscreen #titlebar, body.fullscreen #toolbar, body.fullscreen #bookmarks,
 .tab.split-mate{background:var(--bg-3); box-shadow:inset 0 -2px 0 var(--teal)}
 
 /* ---- settings panel ---- */
-.panel{position:fixed; inset:0; background:rgba(2,8,10,.55); backdrop-filter:blur(3px); display:flex; align-items:flex-start; justify-content:flex-end; z-index:50}
+.panel{position:fixed; inset:0; background:rgba(2,8,10,.55); backdrop-filter:blur(3px); display:flex; align-items:flex-start; justify-content:flex-end; z-index:50; -webkit-app-region:no-drag}
 .panel.hidden{display:none}
 .panel-card{
   width:min(440px,92vw); height:100%; overflow-y:auto; background:linear-gradient(180deg,var(--bg-3),var(--bg));
