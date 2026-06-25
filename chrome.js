@@ -233,10 +233,12 @@ function renderTabs() {
 // so the page below stays fully interactive. When any overlay/menu/dropdown opens we tell main to expand the
 // chrome to the full window, so panels and menus float over the live page (which keeps playing) and nothing
 // gets clipped — then shrink back to the strip when they close.
+function isEditable(t) { return !!(t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)); }
 function anyOverlayOpen() {
   const shown = (id) => { const e = $(id); return !!(e && !e.classList.contains('hidden')); };
   if (shown('settings') || shown('notes-panel') || shown('list-panel') || shown('findbar') || shown('ws-menu')) return true;
   if (document.querySelector('.omni-suggest.open, .folder-pop.open, .soc-overflow.open, #ctx-menu, .confirm-ov')) return true;
+  if (isEditable(document.activeElement)) return true;   // a chrome field (address bar, settings) is focused — chrome must be the top, focusable layer
   return false;
 }
 function stripHeight() { try { return Math.max(1, Math.ceil(viewsEl.getBoundingClientRect().top)) || 92; } catch (_) { return 92; } }
@@ -262,6 +264,9 @@ function layoutViews() {
 }
 window.addEventListener('resize', () => { try { layoutViews(); } catch (_) {} });
 { let _vt = null; const obs = new MutationObserver(() => { clearTimeout(_vt); _vt = setTimeout(() => { try { syncChrome(); } catch (_) {} }, 16); }); obs.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style'] }); }
+// focusing a chrome field must float the chrome above the page AND grab OS keyboard focus, or typing goes to the page
+document.addEventListener('focusin', (e) => { if (isEditable(e.target)) { try { window.materia.focusChrome(); } catch (_) {} } try { syncChrome(); } catch (_) {} });
+document.addEventListener('focusout', () => { setTimeout(() => { try { syncChrome(); } catch (_) {} }, 0); });
 function openInSplit(id) {
   if (id === activeId || !tabs.some(t => t.id === id && t.wsId === activeWsId)) {
     const t = makeTab(activeWsId, null);   // spawn a fresh tab for the second pane
