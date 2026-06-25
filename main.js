@@ -2,7 +2,7 @@
 const { app, BrowserWindow, WebContentsView, session, ipcMain, shell, webContents, nativeTheme, Menu, clipboard, dialog, Notification, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { spawn } = require('child_process');
+const { spawn, execFile } = require('child_process');
 
 // executeJavaScript / insertCSS against a page view can reject if the view navigates or is torn off mid-call.
 // Those are benign races; swallow just those messages so they don't spam the console, surface anything else.
@@ -32,10 +32,19 @@ try { app.commandLine.appendSwitch('enable-features', 'ParallelDownloading'); } 
 // Only one Materia instance may use the user-data folder at a time — a second launch
 // just focuses the existing window instead of fighting over the disk cache (the cause
 // of the "Unable to move/create cache · Access is denied" errors).
+// a URL handed to us when Windows launches Materia as the default browser
+function urlFromArgv(argv) { try { const u = (argv || []).find(a => /^https?:\/\//i.test(a)); return u || null; } catch (_) { return null; } }
+let pendingLaunchUrl = process.platform === 'win32' ? urlFromArgv(process.argv) : null;
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  app.on('second-instance', () => { try { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } } catch (_) {} });
+  app.on('second-instance', (e, argv) => {
+    try {
+      if (win) { if (win.isMinimized()) win.restore(); win.focus(); }
+      const u = urlFromArgv(argv); const w = win || BrowserWindow.getAllWindows()[0];
+      if (u && w) csend(w, 'open-tab', { url: u });   // default-browser invocation while already running → open a tab
+    } catch (_) {}
+  });
 }
 
 // Persistent partition -> cookies/storage survive restarts, so LOGINS persist.
@@ -294,6 +303,7 @@ function createWindow(opts) {
     else if (params.selectionText) { it.push({ role: 'copy' }); }
     if (it.length) { try { Menu.buildFromTemplate(it).popup(); } catch (_) {} }
   });
+  chrome.webContents.on('did-finish-load', () => { if (pendingLaunchUrl) { const u = pendingLaunchUrl; pendingLaunchUrl = null; try { csend(w, 'open-tab', { url: u }); } catch (_) {} } });   // launched as default browser with a URL
   w.on('focus', () => { win = w; });
   w.on('resize', () => applyChromeBounds(w));
   w.on('close', () => { try { const cv = chromeViews.get(w); const pre = (cv ? cv.webContents.id : -1) + ':'; for (const [key, vv] of guestViews) { if (key.indexOf(pre) === 0) { try { vv.webContents.setAudioMuted(true); } catch (_) {} try { vv.webContents.loadURL('about:blank').catch(() => {}); } catch (_) {} try { if (!vv.webContents.isDestroyed()) vv.webContents.close({ waitForBeforeUnload: false }); } catch (_) {} guestViews.delete(key); } } } catch (_) {} });
@@ -632,6 +642,43 @@ ipcMain.handle('show-item', (e, p) => { try { shell.showItemInFolder(p); } catch
 ipcMain.handle('get-dl-dirs', () => { const dl = app.getPath('downloads'); const d = prefs.dlDirs || {}; return { def: dl, video: d.video || dl, image: d.image || dl, audio: d.audio || dl, other: d.other || dl }; });
 ipcMain.handle('pick-dl-dir', async (e, cat) => { const r = await dialog.showOpenDialog(win, { title: 'Choose save folder', properties: ['openDirectory', 'createDirectory'] }); if (r.canceled || !r.filePaths.length) return null; prefs.dlDirs = prefs.dlDirs || {}; prefs.dlDirs[cat] = r.filePaths[0]; writePrefs(prefs); return r.filePaths[0]; });
 ipcMain.handle('reset-dl-dir', (e, cat) => { if (prefs.dlDirs) delete prefs.dlDirs[cat]; writePrefs(prefs); return app.getPath('downloads'); });
+// ---- default browser (Windows): register as a real browser candidate, then open Default Apps so the user picks it ----
+function regAdd(args) { return new Promise(res => { try { execFile('reg', ['add', ...args, '/f'], { windowsHide: true }, () => res()); } catch (_) { res(); } }); }
+async function registerAsBrowser() {
+  if (process.platform !== 'win32') return false;
+  const exe = process.execPath, progId = 'MateriaBrowser.Html';
+  const appK = 'HKCU\\Software\\Clients\\StartMenuInternet\\MateriaBrowser';
+  const cap = appK + '\\Capabilities', cls = 'HKCU\\Software\\Classes\\' + progId;
+  const keys = [
+    [cls, '/ve', '/d', 'Materia Browser HTML Document'],
+    [cls + '\\DefaultIcon', '/ve', '/d', exe + ',0'],
+    [cls + '\\shell\\open\\command', '/ve', '/d', '"' + exe + '" "%1"'],
+    [appK, '/ve', '/d', 'Materia Browser'],
+    [appK + '\\DefaultIcon', '/ve', '/d', exe + ',0'],
+    [appK + '\\shell\\open\\command', '/ve', '/d', '"' + exe + '"'],
+    [cap, '/v', 'ApplicationName', '/d', 'Materia Browser'],
+    [cap, '/v', 'ApplicationDescription', '/d', 'A private, distraction-killing browser by MarrowMyth.'],
+    [cap, '/v', 'ApplicationIcon', '/d', exe + ',0'],
+    [cap + '\\URLAssociations', '/v', 'http', '/d', progId],
+    [cap + '\\URLAssociations', '/v', 'https', '/d', progId],
+    [cap + '\\FileAssociations', '/v', '.htm', '/d', progId],
+    [cap + '\\FileAssociations', '/v', '.html', '/d', progId],
+    [cap + '\\StartMenu', '/v', 'StartMenuInternet', '/d', 'MateriaBrowser'],
+    ['HKCU\\Software\\RegisteredApplications', '/v', 'MateriaBrowser', '/d', 'Software\\Clients\\StartMenuInternet\\MateriaBrowser\\Capabilities']
+  ];
+  for (const k of keys) await regAdd(k);
+  try { app.setAsDefaultProtocolClient('http'); app.setAsDefaultProtocolClient('https'); } catch (_) {}
+  return true;
+}
+function isDefaultBrowser() { try { return process.platform === 'win32' && app.isDefaultProtocolClient('http'); } catch (_) { return false; } }
+ipcMain.handle('default-browser-status', () => ({ supported: process.platform === 'win32', packaged: app.isPackaged, isDefault: isDefaultBrowser() }));
+ipcMain.handle('set-default-browser', async () => {
+  if (process.platform !== 'win32') return { ok: false, reason: 'win-only' };
+  if (!app.isPackaged) return { ok: false, reason: 'dev' };   // process.execPath is electron.exe in dev — only register the real installed build
+  await registerAsBrowser();
+  try { await shell.openExternal('ms-settings:defaultapps'); } catch (_) {}
+  return { ok: true, isDefault: isDefaultBrowser() };
+});
 // ---- video downloader (yt-dlp) ----
 const QUALITY_FMT = {
   best: 'best[ext=mp4]/best',

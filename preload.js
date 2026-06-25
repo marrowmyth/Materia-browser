@@ -31,6 +31,8 @@ contextBridge.exposeInMainWorld('materia', {
   ensurePartition: (partition) => ipcRenderer.invoke('ensure-partition', partition),
   setBlockTrackers: (v) => ipcRenderer.invoke('set-block-trackers', v),
   adblockStatus: () => ipcRenderer.invoke('adblock-status'),
+  defaultBrowserStatus: () => ipcRenderer.invoke('default-browser-status'),
+  setDefaultBrowser: () => ipcRenderer.invoke('set-default-browser'),
   getTrusted: () => ipcRenderer.invoke('get-trusted'),
   addTrusted: (host) => ipcRenderer.invoke('add-trusted', host),
   removeTrusted: (host) => ipcRenderer.invoke('remove-trusted', host),

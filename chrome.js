@@ -664,7 +664,25 @@ $('ws-new-input').addEventListener('keydown', (e) => {
 
 /* ---------- settings ---------- */
 const settings = $('settings');
-$('nav-settings').addEventListener('click', () => { settings.classList.remove('hidden'); collapseAllBlocks(); renderProviderSetting(); renderAdblockStatus(); renderTrusted(); });
+$('nav-settings').addEventListener('click', () => { settings.classList.remove('hidden'); collapseAllBlocks(); renderProviderSetting(); renderAdblockStatus(); renderTrusted(); renderDefaultBrowser(); });
+function renderDefaultBrowser() {
+  const st = $('default-browser-status'); if (!st || !window.materia.defaultBrowserStatus) return;
+  window.materia.defaultBrowserStatus().then(s => {
+    if (!s || !s.supported) { st.textContent = 'Available on Windows.'; st.style.color = 'var(--ink-faint)'; return; }
+    if (!s.packaged) { st.textContent = 'Available in the installed app (not in dev mode).'; st.style.color = 'var(--ink-faint)'; return; }
+    st.textContent = s.isDefault ? '● Materia is your default browser.' : '○ Not currently the default.';
+    st.style.color = s.isDefault ? 'var(--teal)' : 'var(--ink-faint)';
+  }).catch(() => {});
+}
+{ const b = $('set-default-browser'); if (b) b.addEventListener('click', () => {
+  if (!window.materia.setDefaultBrowser) return;
+  window.materia.setDefaultBrowser().then(r => {
+    if (r && r.reason === 'dev') showMini('Works in the installed app — not in dev');
+    else if (r && r.reason === 'win-only') showMini('Windows only');
+    else showMini('In Default apps, pick “Materia Browser” for Web browser');
+    setTimeout(renderDefaultBrowser, 2000);
+  }).catch(() => {});
+}); }
 function renderTrusted() {
   const list = $('trust-list'); if (!list || !window.materia.getTrusted) return;
   window.materia.getTrusted().then(hosts => {

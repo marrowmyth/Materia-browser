@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Materia Browser — Reel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400;1,500&family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  /* ===== Materia launch reel — vertical 9:16 (1080×1920), narrative cut =====
+     The web is loud → Materia quiets it. Open in a browser, F11 fullscreen,
+     click ▶, screen-record the vertical panel. Holds on the CTA. Press R to replay. */
+  :root{
+    --teal:#33d1bd; --teal-rgb:51,209,189; --dim:#11665c; --bright:#cdf7f0;
+    --bg:#061215; --ink:#dae7ec; --muted:#9fb3b7; --faint:#5e8082;
+    --serif:'Lora',Georgia,serif; --disp:'Rajdhani',sans-serif; --mono:'Share Tech Mono',monospace;
+  }
+  *{box-sizing:border-box; margin:0; padding:0}
+  html,body{height:100%; background:#000; overflow:hidden; color:var(--ink)}
+  #fit{position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:#000}
+  #stage{
+    position:relative; width:1080px; height:1920px; transform-origin:center; overflow:hidden;
+    background:linear-gradient(165deg,#000 0%,#061417 48%,#03090b 100%);
+  }
+  /* MarrowMyth grid texture + breathing aura (matches the site) */
+  #stage::before{content:""; position:absolute; inset:0; pointer-events:none;
+    background:radial-gradient(circle,rgba(92,148,147,.05) 1px,transparent 1px),linear-gradient(rgba(92,148,147,.022) 1px,transparent 1px),linear-gradient(90deg,rgba(92,148,147,.022) 1px,transparent 1px);
+    background-size:34px 34px,68px 68px,68px 68px}
+  .aura{position:absolute; top:50%; left:50%; width:760px; height:760px; transform:translate(-50%,-50%); border-radius:50%;
+    background:radial-gradient(circle,rgba(var(--teal-rgb),.12),transparent 65%); pointer-events:none; animation:breathe 6s ease-in-out infinite}
+  @keyframes breathe{0%,100%{opacity:.4; transform:translate(-50%,-50%) scale(1)}50%{opacity:.85; transform:translate(-50%,-50%) scale(1.16)}}
+
+  .slide{position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:30px; padding:130px 96px; text-align:center; opacity:0; visibility:hidden}
+  .slide.active{opacity:1; visibility:visible; transition:opacity .6s ease}
+  .slide.out{opacity:0; visibility:visible; transition:opacity .5s ease}
+
+  .label{font-family:var(--mono); font-size:28px; letter-spacing:.5em; text-transform:uppercase; color:var(--faint)}
+  .disp{font-family:var(--disp); font-weight:700; text-transform:uppercase; letter-spacing:.04em; line-height:1.04; font-size:96px}
+  .grad{background:linear-gradient(105deg,#11665c,#33d1bd,#cdf7f0,#33d1bd,#11665c); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; color:transparent}
+  .lit{font-family:var(--serif); font-style:italic; font-weight:400; color:#bfe0db; font-size:52px; line-height:1.5; max-width:840px}
+  .lit.big{font-size:62px; color:#d9efeb}
+  .rule{width:150px; height:1px; background:linear-gradient(90deg,transparent,#33d1bd,#cdf7f0,#33d1bd,transparent)}
+
+  /* staged entrances */
+  .slide.active .anim{animation:rise .85s cubic-bezier(.2,.7,.2,1) both}
+  .a2{animation-delay:.5s!important} .a3{animation-delay:1.15s!important} .a4{animation-delay:1.9s!important} .a5{animation-delay:2.6s!important}
+  @keyframes rise{from{opacity:0; transform:translateY(40px)}to{opacity:1; transform:translateY(0)}}
+  @keyframes pop{from{opacity:0; transform:scale(.62)}60%{transform:scale(1.05)}to{opacity:1; transform:scale(1)}}
+
+  /* ---------- S1: THE NOISE ---------- */
+  #s-noise .noisewrap{position:absolute; inset:0; pointer-events:none}
+  .nz{position:absolute; font-family:var(--disp); font-weight:700; text-transform:uppercase; letter-spacing:.05em; padding:18px 26px; border-radius:8px; font-size:30px; white-space:nowrap; opacity:0; box-shadow:0 14px 40px rgba(0,0,0,.5)}
+  .slide.active .nz{animation:nzin .6s ease forwards, jit 1.1s ease-in-out infinite}
+  @keyframes nzin{to{opacity:1}}
+  @keyframes jit{0%,100%{transform:translate(0,0) rotate(var(--r,0deg))}25%{transform:translate(-6px,4px) rotate(var(--r,0deg))}50%{transform:translate(5px,-5px) rotate(var(--r,0deg))}75%{transform:translate(-3px,-3px) rotate(var(--r,0deg))}}
+  .slide.out .nz{animation:nzout .5s ease forwards}
+  @keyframes nzout{to{opacity:0; transform:scale(.7) translateY(-30px); filter:blur(6px)}}
+  .nz.ad{background:#d6483f; color:#fff; --r:-7deg; top:300px; left:90px; animation-delay:.05s}
+  .nz.trk{background:#e08a2a; color:#1c1206; --r:6deg; top:430px; right:80px; animation-delay:.18s}
+  .nz.pop{background:#caa520; color:#1c1606; --r:-4deg; top:1180px; left:120px; animation-delay:.32s}
+  .nz.wall{background:#b23a8f; color:#fff; --r:5deg; top:1330px; right:70px; font-size:26px; animation-delay:.24s}
+  .nz.notif{background:#3f7fd6; color:#fff; --r:-6deg; top:1450px; left:150px; font-size:26px; animation-delay:.4s}
+  .nz.buy{background:#2fae5a; color:#04140a; --r:7deg; top:250px; right:140px; animation-delay:.12s}
+  .nz.cookie{background:#7a5cc0; color:#fff; --r:-5deg; top:1080px; right:150px; font-size:25px; animation-delay:.46s}
+
+  /* ---------- emblem ---------- */
+  .emblem{width:300px; height:300px; filter:drop-shadow(0 0 52px rgba(var(--teal-rgb),.55))}
+  .slide.active .emb{animation:pop 1.1s cubic-bezier(.2,.8,.2,1) both}
+  .wordmark{font-family:var(--disp); font-weight:700; font-size:150px; letter-spacing:14px}
+  .wm-sub{font-family:var(--mono); font-size:42px; letter-spacing:.55em; text-transform:uppercase; color:var(--muted); margin-top:-8px}
+
+  /* ---------- proof row ---------- */
+  .proof{display:flex; gap:20px; flex-wrap:wrap; justify-content:center; margin-top:14px}
+  .pf{border:1px solid rgba(var(--teal-rgb),.22); background:rgba(var(--teal-rgb),.05); border-radius:14px; padding:26px 30px; min-width:230px}
+  .pf .n{font-family:var(--disp); font-weight:700; font-size:64px; color:var(--bright); line-height:1; text-shadow:0 0 24px rgba(var(--teal-rgb),.3)}
+  .pf .c{font-family:var(--mono); font-size:23px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); margin-top:12px}
+  .slide.active .pf{animation:rise .7s both}
+  .slide.active .pf:nth-child(2){animation-delay:.12s} .slide.active .pf:nth-child(3){animation-delay:.24s} .slide.active .pf:nth-child(4){animation-delay:.36s}
+
+  /* ---------- CTA ---------- */
+  #s-cta .emblem{width:220px; height:220px}
+  .cta-line{font-family:var(--disp); font-weight:600; font-size:74px; line-height:1.15; letter-spacing:.02em; max-width:880px}
+  .cta-url{font-family:var(--mono); font-size:44px; letter-spacing:.18em; text-transform:lowercase; color:var(--bright)}
+  .cta-tag{font-family:var(--serif); font-style:italic; font-size:42px; color:var(--muted)}
+
+  /* progress + controls */
+  #prog{position:absolute; left:0; bottom:0; height:6px; width:0; background:linear-gradient(90deg,#11665c,#cdf7f0); box-shadow:0 0 14px var(--teal)}
+  #play{position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:34px; background:rgba(3,9,11,.78); backdrop-filter:blur(5px); cursor:pointer; z-index:10}
+  #play .pbtn{width:150px; height:150px; border-radius:50%; border:2px solid var(--teal); display:flex; align-items:center; justify-content:center; box-shadow:0 0 50px rgba(var(--teal-rgb),.4)}
+  #play .pbtn::after{content:""; border-style:solid; border-width:30px 0 30px 52px; border-color:transparent transparent transparent var(--bright); margin-left:12px}
+  #play .ptext{font-family:var(--disp); font-weight:600; font-size:38px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink)}
+  #play .phint{font-family:var(--mono); font-size:23px; color:var(--muted); max-width:680px; line-height:1.5; letter-spacing:.04em}
+  #replay{position:absolute; bottom:120px; left:50%; transform:translateX(-50%); font-family:var(--mono); font-size:26px; letter-spacing:.12em; color:var(--teal); border:1px solid rgba(var(--teal-rgb),.3); background:rgba(var(--teal-rgb),.07); padding:14px 30px; border-radius:30px; cursor:pointer; opacity:0; transition:opacity .5s; z-index:9}
+  #replay.show{opacity:1}
+</style>
+</head>
+<body>
+<div id="fit"><div id="stage">
+  <div class="aura"></div>
+
+  <!-- S1 — THE NOISE -->
+  <section class="slide" id="s-noise">
+    <div class="noisewrap">
+      <span class="nz ad">AD</span><span class="nz buy">BUY NOW</span>
+      <span class="nz trk">TRACKING YOU</span><span class="nz cookie">ACCEPT ALL COOKIES?</span>
+      <span class="nz pop">POP-UP</span><span class="nz wall">DISABLE YOUR AD BLOCKER</span>
+      <span class="nz notif">12 NEW NOTIFICATIONS</span>
+    </div>
+    <div class="label anim">The modern web</div>
+    <div class="disp anim a2">got loud.</div>
+  </section>
+
+  <!-- S2 — THE QUIET -->
+  <section class="slide" id="s-quiet">
+    <img class="emblem emb" src="assets/emblem.webp" alt="">
+    <div class="lit big anim a2">So one got built to quiet it.</div>
+  </section>
+
+  <!-- S3 — BRAND -->
+  <section class="slide" id="s-brand">
+    <div class="wordmark grad anim">MATERIA</div>
+    <div class="wm-sub anim a2">Browser</div>
+    <div class="rule anim a3"></div>
+    <div class="lit anim a3" style="margin-top:8px">Quiet the noise —<br>in your head, and in your tabs.</div>
+  </section>
+
+  <!-- S4 — THE STORY -->
+  <section class="slide" id="s-story">
+    <div class="label anim">Why it exists</div>
+    <div class="lit anim a2">Built for one person first. Me.</div>
+    <div class="lit anim a3">An author, a designer, an artist —<br>living in a dozen tabs, drowning in the churn.</div>
+    <div class="lit anim a4" style="color:#d9efeb">I wanted one that got out of the way.<br>So I built it.</div>
+  </section>
+
+  <!-- S5 — THE DEFENSE -->
+  <section class="slide" id="s-defend">
+    <div class="disp anim"><span class="grad">Private by default.</span></div>
+    <div class="lit anim a2" style="margin-top:-6px">Ruthless about noise. Nothing leaves your machine.</div>
+    <div class="proof">
+      <div class="pf"><div class="n">0</div><div class="c">Telemetry · Ever</div></div>
+      <div class="pf"><div class="n">11</div><div class="c">Ad-Filter Lists</div></div>
+      <div class="pf"><div class="n">100%</div><div class="c">On Your Device</div></div>
+    </div>
+  </section>
+
+  <!-- S6 — THE LINE -->
+  <section class="slide" id="s-line">
+    <div class="rule anim"></div>
+    <div class="lit big anim a2" style="font-size:68px; line-height:1.45; color:#e6f6f2">So the work in your head<br>is the <span class="grad" style="font-style:normal; font-family:var(--disp); font-weight:700">loudest</span><br>thing in the room.</div>
+    <div class="rule anim a4"></div>
+  </section>
+
+  <!-- S7 — CTA (held) -->
+  <section class="slide" id="s-cta">
+    <img class="emblem emb" src="assets/emblem.webp" alt="">
+    <div class="cta-line anim a2">Go to <span class="grad">MarrowMyth</span><br>to get your Materia today.</div>
+    <div class="cta-url anim a3">marrowmyth.com</div>
+    <div class="cta-tag anim a4">Quiet your tabs. Free your head.</div>
+  </section>
+
+  <div id="prog"></div>
+  <div id="replay">↻ Replay</div>
+  <div id="play">
+    <div class="pbtn"></div>
+    <div class="ptext">Play the reel</div>
+    <div class="phint">For recording: press F11 for fullscreen, then capture the vertical panel. Plays once and holds on the end card. (Press R to replay.)</div>
+  </div>
+</div></div>
+
+<script>
+  const stage = document.getElementById('stage');
+  function fit(){ const s = Math.min(window.innerWidth/1080, window.innerHeight/1920); stage.style.transform = 'scale('+s+')'; }
+  window.addEventListener('resize', fit); fit();
+
+  // narrative timeline (ms). ≈ 27s, then holds on the CTA.
+  const steps = [
+    { id:'s-noise',  t:4200 },
+    { id:'s-quiet',  t:3800 },
+    { id:'s-brand',  t:4200 },
+    { id:'s-story',  t:5400 },
+    { id:'s-defend', t:4600 },
+    { id:'s-line',   t:4600 },
+    { id:'s-cta',    t:0    }   // hold until replay
+  ];
+  const slides = steps.map(s => document.getElementById(s.id));
+  const prog = document.getElementById('prog'), playOv = document.getElementById('play'), replay = document.getElementById('replay');
+  let timer = null, rafId = null;
+
+  const clearAll = () => slides.forEach(el => el.classList.remove('active','out'));
+  const show = el => { el.classList.remove('active'); void el.offsetWidth; el.classList.add('active'); };
+
+  function run(i, total, before){
+    if (i >= steps.length) return;
+    if (i>0){ const prev = slides[i-1]; prev.classList.remove('active'); prev.classList.add('out'); setTimeout(()=>prev.classList.remove('out'), 520); }
+    show(slides[i]);
+    const step = steps[i];
+    if (step.t === 0){ animProg(before, total, total); replay.classList.add('show'); return; }
+    animProg(before, before + step.t, total);
+    timer = setTimeout(()=> run(i+1, total, before + step.t), step.t);
+  }
+  function animProg(from, to, total){
+    const start = performance.now(), dur = to - from;
+    cancelAnimationFrame(rafId);
+    (function frame(now){ const k = dur ? Math.min(1,(now-start)/dur) : 1; prog.style.width = (from + dur*k)/total*100 + '%'; if (k<1) rafId = requestAnimationFrame(frame); })(performance.now());
+  }
+  function start(){
+    clearTimeout(timer); cancelAnimationFrame(rafId);
+    clearAll(); replay.classList.remove('show'); prog.style.width='0';
+    run(0, steps.reduce((a,s)=>a+s.t,0), 0);
+  }
+  playOv.addEventListener('click', ()=>{ playOv.style.display='none'; start(); });
+  replay.addEventListener('click', start);
+  window.addEventListener('keydown', e => { if (e.key.toLowerCase()==='r'){ playOv.style.display='none'; start(); } });
+</script>
+</body>
+</html>
