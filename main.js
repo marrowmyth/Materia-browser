@@ -1,5 +1,5 @@
 'use strict';
-const { app, BrowserWindow, WebContentsView, session, ipcMain, shell, webContents, nativeTheme, Menu, clipboard, dialog, Notification } = require('electron');
+const { app, BrowserWindow, WebContentsView, session, ipcMain, shell, webContents, nativeTheme, Menu, clipboard, dialog, Notification, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
@@ -266,8 +266,11 @@ function chromeToTop(w) { const v = chromeViews.get(w); if (v) try { w.contentVi
 function chromeToBottom(w) { const v = chromeViews.get(w); if (v) try { w.contentView.removeChildView(v); w.contentView.addChildView(v, 0); } catch (_) {} }
 function createWindow(opts) {
   opts = opts || {};
+  // a torn-off window opens with its tab strip under the cursor where you dropped it
+  const px = opts.x ? Math.round(opts.x) - 140 : undefined;
+  const py = opts.y ? Math.round(opts.y) - 14 : undefined;
   const w = new BrowserWindow({
-    width: 1280, height: 820, minWidth: 760, minHeight: 480,
+    width: 1280, height: 820, minWidth: 760, minHeight: 480, x: px, y: py,
     frame: false, backgroundColor: '#061215', title: 'Materia Browser',
     icon: path.join(__dirname, 'assets', 'icon-white.png'),
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true }
@@ -566,11 +569,11 @@ ipcMain.on('tab-move-out', (e, d) => {
     try { v.setVisible(false); } catch (_) {}
     try { src.contentView.removeChildView(v); } catch (_) {}
     limbo.set(d.xfer, v);
-    const x = Math.round(d.x || 0), y = Math.round(d.y || 0);
-    const hasPt = !!(d.x || d.y);
-    const target = hasPt ? BrowserWindow.getAllWindows().find(w => { if (w === src || w.isDestroyed() || !w.isVisible()) return false; const b = w.getBounds(); return x >= b.x && x <= b.x + b.width && y >= b.y && y <= b.y + b.height; }) : null;
+    let pt = { x: Math.round(d.x || 0), y: Math.round(d.y || 0) };
+    try { pt = screen.getCursorScreenPoint(); } catch (_) {}   // reliable drop point (HTML5 dragend coords are flaky)
+    const target = BrowserWindow.getAllWindows().find(w => { if (w === src || w.isDestroyed() || !w.isVisible()) return false; const b = w.getBounds(); return pt.x >= b.x && pt.x <= b.x + b.width && pt.y >= b.y && pt.y <= b.y + b.height; });
     if (target) csend(target, 'adopt-tab', { xfer: d.xfer, url: d.url, title: d.title, wsId: d.wsId });
-    else createWindow({ adopt: d.xfer, url: d.url, wsId: d.wsId });
+    else createWindow({ adopt: d.xfer, url: d.url, wsId: d.wsId, x: pt.x, y: pt.y });
     setTimeout(() => { const lv = limbo.get(d.xfer); if (lv) { limbo.delete(d.xfer); try { if (!lv.webContents.isDestroyed()) lv.webContents.close({ waitForBeforeUnload: false }); } catch (_) {} } }, 20000);   // never adopted → don't leak
   } catch (_) {}
 });
@@ -584,6 +587,9 @@ ipcMain.on('view-adopt', (e, d) => {
     try { v.setVisible(false); } catch (_) {}
     guestViews.set(gKey(e.sender.id, d.vid), v);
     viewMeta.set(v.webContents.id, { win: w, vid: d.vid });   // events + popups + shortcuts now route to the new window/vid
+    const wc = v.webContents;   // the moved view won't re-fire these, so push its current state to the adopting tab
+    try { csend(w, 'view-event', { vid: d.vid, event: 'did-navigate', payload: { url: wc.getURL(), canBack: wc.navigationHistory.canGoBack(), canForward: wc.navigationHistory.canGoForward() } }); } catch (_) {}
+    try { const ti = wc.getTitle(); if (ti) csend(w, 'view-event', { vid: d.vid, event: 'page-title-updated', payload: { title: ti } }); } catch (_) {}
   } catch (_) {}
 });
 ipcMain.on('view-nav', (e, d) => { const v = gResolve(e, d.vid); if (!v) return; const wc = v.webContents; try { if (d.action === 'load') wc.loadURL(d.url).catch(() => {}); else if (d.action === 'reload') wc.reload(); else if (d.action === 'back') { if (wc.navigationHistory.canGoBack()) wc.navigationHistory.goBack(); } else if (d.action === 'forward') { if (wc.navigationHistory.canGoForward()) wc.navigationHistory.goForward(); } } catch (_) {} });
