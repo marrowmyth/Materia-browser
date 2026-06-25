@@ -57,5 +57,8 @@ contextBridge.exposeInMainWorld('materia', {
   viewCss: (d) => ipcRenderer.send('view-css', d),
   viewExec: (d) => ipcRenderer.invoke('view-exec', d),
   viewCapture: (d) => ipcRenderer.invoke('view-capture', d),
+  tabMoveOut: (d) => ipcRenderer.send('tab-move-out', d),
+  viewAdopt: (d) => ipcRenderer.send('view-adopt', d),
+  onAdoptTab: (cb) => ipcRenderer.on('adopt-tab', (e, d) => cb(d)),
   onViewEvent: (cb) => ipcRenderer.on('view-event', (e, d) => cb(d))
 });

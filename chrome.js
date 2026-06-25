@@ -187,6 +187,39 @@ function closeTab(id) {
   saveSession();
 }
 
+function newXfer() { return 'xf_' + Date.now() + '_' + Math.floor(Math.random() * 1e6); }
+// remove a tab from THIS window WITHOUT destroying its view — the live view is being moved to another window
+function detachTab(id) {
+  const i = tabs.findIndex(t => t.id === id);
+  if (i === -1) return;
+  const ct = tabs[i]; const wsId = ct.wsId;
+  delete viewState[id];
+  tabs.splice(i, 1);
+  if (id === splitId) { splitId = null; layoutViews(); }
+  if (activeId === id) {
+    const siblings = tabs.filter(x => x.wsId === wsId);
+    if (siblings.length) activateTab(siblings[siblings.length - 1].id);
+    else if (IS_SECONDARY) { try { window.materia.winClose(); } catch (_) {} return; }   // emptied a torn window → close it
+    else createTab();
+  }
+  renderTabs(); saveSession();
+}
+// build a tab around a view that is ALREADY alive in main (moved from another window) — no viewCreate, no reload
+function adoptTab(o) {
+  o = o || {};
+  const wsId = activeWsId;   // land it in the window's current workspace so it's visible (new windows already set activeWsId to the source's)
+  ensureWs(wsId);
+  const id = ++seq; const url = o.url || '';
+  const tab = { id, wsId, title: o.title || 'Tab', url: url, favicon: null, loading: false, pinned: false };
+  viewState[id] = { url: url, canBack: false, canForward: false };
+  tab.view = makeViewProxy(id);
+  tabs.push(tab);
+  wireView(tab);
+  window.materia.viewAdopt({ xfer: o.xfer, vid: id });   // main re-parents the live WebContentsView under this vid
+  renderTabs(); activateTab(id); saveSession();
+  return tab;
+}
+
 function renderTabs() {
   tabsEl.innerHTML = '';
   const list = wsTabs().slice().sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
@@ -218,7 +251,7 @@ function renderTabs() {
       // dropped outside this window's bounds → tear the tab into its own window
       if (torn === t.id && (e.screenX || e.screenY)) {
         const out = e.screenX < window.screenX || e.screenX > window.screenX + window.outerWidth || e.screenY < window.screenY || e.screenY > window.screenY + window.outerHeight;
-        if (out) { try { window.materia.tabDroppedOut({ url: isNewtab(t.url) ? '' : t.url, wsId: t.wsId, x: e.screenX, y: e.screenY }); } catch (_) {} closeTab(t.id); }
+        if (out) { try { window.materia.tabMoveOut({ vid: t.id, xfer: newXfer(), url: t.url, title: t.title, wsId: t.wsId, x: e.screenX, y: e.screenY }); } catch (_) {} detachTab(t.id); }
       }
     });
     el.addEventListener('dragover', (e) => { if (dragTabId && dragTabId !== t.id) { e.preventDefault(); el.classList.add('tab-drop'); } });
@@ -307,7 +340,7 @@ function showTabMenu(t, x, y) {
   items.push(
     { label: 'New tab', fn: () => createTab() },
     { label: 'Duplicate tab', fn: () => createTab(t.url) },
-    { label: 'Open in new window', fn: () => { window.materia.openInNewWindow(isNewtab(t.url) ? '' : t.url, t.wsId); closeTab(t.id); } },
+    { label: 'Move to new window', fn: () => { try { window.materia.tabMoveOut({ vid: t.id, xfer: newXfer(), url: t.url, title: t.title, wsId: t.wsId }); } catch (_) {} detachTab(t.id); } },
     { label: 'Reload', fn: () => { try { t.view.reload(); } catch (_) {} } },
     { label: 'Close tab', fn: () => closeTab(t.id) },
     { label: 'Close other tabs', fn: () => { wsTabs().filter(x => x.id !== t.id && !x.pinned).map(x => x.id).forEach(closeTab); } }
@@ -703,6 +736,8 @@ window.materia.onOpenTab((data) => {
   if (data && data.background) { makeTab(activeWsId, url); renderTabs(); saveSession(); }   // ctrl/middle-click or right-click "open in new tab" → stay put
   else { createTab(url); }   // a link/button that opened a tab → switch to it
 });
+// another window dropped a LIVE tab onto this one → adopt its view (no reload)
+window.materia.onAdoptTab((d) => { try { adoptTab(d); } catch (_) {} });
 // start page sent a query to an AI: open it in the current tab and prefill once loaded
 window.materia.onAIQuery((d) => { const t = activeTab(); if (!t || !d || !d.url) return; t._pendingAI = (d.query || ''); t.view.loadURL(d.url); });
 // a scripted pop-up: ask non-intrusively, in case it was intentional (OAuth, share…)
@@ -1349,8 +1384,8 @@ $('note-due-clear').addEventListener('click', () => { $('note-due').value = ''; 
 
 /* ---------- boot ---------- */
 loadWorkspaces();
-const _mmQ = new URLSearchParams(location.search); const _mmTornUrl = _mmQ.get('u'); const _mmNew = _mmQ.get('nw');   // torn-off / new window (nw = blank start page)
-if (_mmTornUrl || _mmNew) { IS_SECONDARY = true; const ws = _mmQ.get('ws'); if (ws && workspaces.some(w => w.id === ws)) activeWsId = ws; }
+const _mmQ = new URLSearchParams(location.search); const _mmTornUrl = _mmQ.get('u'); const _mmNew = _mmQ.get('nw'); const _mmAdopt = _mmQ.get('ad');   // torn-off / new window (nw = blank) / ad = adopt a live moved tab
+if (_mmTornUrl || _mmNew || _mmAdopt) { IS_SECONDARY = true; const ws = _mmQ.get('ws'); if (ws && workspaces.some(w => w.id === ws)) activeWsId = ws; }
 loadBookmarks();
 loadSocialLinks();
 loadHistory();
@@ -1370,4 +1405,5 @@ loadNotes();
 { const t = $('toggle-notes-btn'); if (t) t.checked = notesData.showBtn; }
 applyNotesBtnVisibility();
 startNotesTimer();
-if (_mmTornUrl) createTab(_mmTornUrl); else if (_mmNew) createTab(); else if (!restoreSession()) createTab();
+if (_mmAdopt) adoptTab({ xfer: _mmAdopt, url: _mmTornUrl || '', wsId: _mmQ.get('ws') });
+else if (_mmTornUrl) createTab(_mmTornUrl); else if (_mmNew) createTab(); else if (!restoreSession()) createTab();

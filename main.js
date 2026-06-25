@@ -4,6 +4,14 @@ const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
 
+// executeJavaScript / insertCSS against a page view can reject if the view navigates or is torn off mid-call.
+// Those are benign races; swallow just those messages so they don't spam the console, surface anything else.
+process.on('unhandledRejection', (reason) => {
+  const m = (reason && reason.message) ? String(reason.message) : String(reason);
+  if (/Script failed to execute|Object has been destroyed|been disposed|render frame was disposed|webContents was destroyed/i.test(m)) return;
+  console.warn('Unhandled rejection:', m);
+});
+
 // ---- persisted prefs (read before app-ready so we can set Chromium flags) ----
 const PREFS_PATH = path.join(process.env.APPDATA || process.env.HOME || '.', 'materia-browser', 'prefs.json');
 function readPrefs() { try { return JSON.parse(fs.readFileSync(PREFS_PATH, 'utf8')); } catch (_) { return {}; } }
@@ -274,7 +282,7 @@ function createWindow(opts) {
   w._chromeFull = false;   // browsing state: chrome tucked behind the page; flips true when an overlay opens
   w.contentView.addChildView(chrome);
   applyChromeBounds(w);
-  const q = {}; if (opts.url) q.u = opts.url; if (opts.wsId) q.ws = opts.wsId; if (opts.torn) q.nw = '1';
+  const q = {}; if (opts.url) q.u = opts.url; if (opts.wsId) q.ws = opts.wsId; if (opts.torn) q.nw = '1'; if (opts.adopt) q.ad = opts.adopt;
   chrome.webContents.loadFile('index.html', Object.keys(q).length ? { query: q } : undefined);
   // right-click menu for the chrome's own inputs (address bar, settings fields)
   chrome.webContents.on('context-menu', (e, params) => {
@@ -470,19 +478,20 @@ function popupContextMenu(wc, params) {
 function wireGuest(wc, ownerWin) {
   if (!wc || wc.__mmReg) return;
   wc.__mmReg = true;
+  const owner = () => { const m = viewMeta.get(wc.id); return m ? m.win : ownerWin; };   // current host window (follows a moved tab)
   try { wc.setWebRTCIPHandlingPolicy('default_public_interface_only'); } catch (_) {}
   wc.setWindowOpenHandler(({ url, disposition }) => {
     if (/^https?:/i.test(url) && (isTracker(url) || adWouldBlock(url, wc.getURL()))) return { action: 'deny' };
     if (isAuthPopup(url)) return { action: 'allow' };
     if (disposition === 'foreground-tab' || disposition === 'background-tab') {
-      if (ownerWin) csend(ownerWin, 'open-tab', { url, background: disposition === 'background-tab' });
+      const ow = owner(); if (ow) csend(ow, 'open-tab', { url, background: disposition === 'background-tab' });
       return { action: 'deny' };
     }
-    if (ownerWin) csend(ownerWin, 'popup-blocked', url);
+    const ow = owner(); if (ow) csend(ow, 'popup-blocked', url);
     return { action: 'deny' };
   });
   wc.on('context-menu', (e2, params) => popupContextMenu(wc, params));
-  wc.once('destroyed', () => darkAttached.delete(wc.id));
+  wc.once('destroyed', () => { darkAttached.delete(wc.id); viewMeta.delete(wc.id); });
   wc.on('did-navigate', () => applyDark(wc));
   wc.on('devtools-opened', () => { if (darkAttached.has(wc.id)) { try { wc.debugger.detach(); } catch (_) {} darkAttached.delete(wc.id); } });
   wc.on('devtools-closed', () => applyDark(wc));
@@ -496,15 +505,17 @@ function wireGuest(wc, ownerWin) {
     else if (ctrl && k === 'Tab') cmd = 'nexttab';
     else if (ctrl && /^[1-9]$/.test(k)) cmd = 'tab' + k;
     else if (ctrl) { const m = { t: 'newtab', w: 'closetab', l: 'focusomni', r: 'reload', f: 'find', d: 'bookmark', p: 'print', '=': 'zoomin', '+': 'zoomin', '-': 'zoomout', '0': 'zoomreset' }; cmd = m[k.toLowerCase()]; }
-    if (cmd) { event.preventDefault(); if (ownerWin) csend(ownerWin, 'shortcut', cmd); }
+    if (cmd) { event.preventDefault(); const ow = owner(); if (ow) csend(ow, 'shortcut', cmd); }
   });
-  wc.on('zoom-changed', (e3, dir) => { if (ownerWin) csend(ownerWin, 'zoom-wheel', dir); });
+  wc.on('zoom-changed', (e3, dir) => { const ow = owner(); if (ow) csend(ow, 'zoom-wheel', dir); });
 }
 // legacy path (old <webview> guests register their wc id); unused once tabs are WebContentsViews
 ipcMain.on('register-view', (e, wcId) => { const wc = webContents.fromId(wcId); if (wc) wireGuest(wc, BrowserWindow.fromWebContents(e.sender) || win); });
 
 // ---- WebContentsView tab engine (each tab is a main-owned view; survives moving between windows) ----
 const guestViews = new Map();   // `${chromeWcId}:${vid}` -> WebContentsView  (keyed by the chrome view that owns the tab)
+const viewMeta = new Map();     // page-view wc id -> { win, vid }  (kept current so events/owner follow a tab moved between windows)
+const limbo = new Map();        // xfer id -> detached WebContentsView, alive and awaiting adoption by another window
 function gKey(chromeWcId, vid) { return chromeWcId + ':' + vid; }
 function gResolve(e, vid) { return guestViews.get(gKey(e.sender.id, vid)) || null; }
 ipcMain.on('view-create', (e, o) => {
@@ -519,8 +530,9 @@ ipcMain.on('view-create', (e, o) => {
     guestViews.set(gKey(e.sender.id, o.vid), view);
     const wc = view.webContents;
     try { wc.setMaxListeners(40); } catch (_) {}   // we attach ~15 listeners across events per view
+    viewMeta.set(wc.id, { win: w, vid: o.vid });
     wireGuest(wc, w);
-    const send = (event, payload) => { try { csend(w, 'view-event', { vid: o.vid, event: event, payload: payload }); } catch (_) {} };
+    const send = (event, payload) => { try { const m = viewMeta.get(wc.id); if (m) csend(m.win, 'view-event', { vid: m.vid, event: event, payload: payload }); } catch (_) {} };
     wc.on('page-title-updated', (e2, title) => send('page-title-updated', { title: title }));
     wc.on('page-favicon-updated', (e2, favicons) => send('page-favicon-updated', { favicons: favicons }));
     wc.on('did-start-loading', () => send('did-start-loading', {}));
@@ -539,10 +551,40 @@ ipcMain.on('view-destroy', (e, d) => {
   const k = gKey(e.sender.id, d.vid); const v = guestViews.get(k); if (!v) return;
   guestViews.delete(k);
   const wc = v.webContents;
+  try { viewMeta.delete(wc.id); } catch (_) {}
   try { wc.setAudioMuted(true); } catch (_) {}
   try { wc.loadURL('about:blank').catch(() => {}); } catch (_) {}   // navigate away — reliably stops video/audio
   try { w.contentView.removeChildView(v); } catch (_) {}
   try { if (!wc.isDestroyed()) wc.close({ waitForBeforeUnload: false }); } catch (_) {}
+});
+// ---- moving a LIVE tab between windows (no reload): detach the view into limbo, then re-parent it ----
+ipcMain.on('tab-move-out', (e, d) => {
+  try {
+    const src = senderWin(e); if (!src) return;
+    const v = guestViews.get(gKey(e.sender.id, d.vid)); if (!v) return;
+    guestViews.delete(gKey(e.sender.id, d.vid));
+    try { v.setVisible(false); } catch (_) {}
+    try { src.contentView.removeChildView(v); } catch (_) {}
+    limbo.set(d.xfer, v);
+    const x = Math.round(d.x || 0), y = Math.round(d.y || 0);
+    const hasPt = !!(d.x || d.y);
+    const target = hasPt ? BrowserWindow.getAllWindows().find(w => { if (w === src || w.isDestroyed() || !w.isVisible()) return false; const b = w.getBounds(); return x >= b.x && x <= b.x + b.width && y >= b.y && y <= b.y + b.height; }) : null;
+    if (target) csend(target, 'adopt-tab', { xfer: d.xfer, url: d.url, title: d.title, wsId: d.wsId });
+    else createWindow({ adopt: d.xfer, url: d.url, wsId: d.wsId });
+    setTimeout(() => { const lv = limbo.get(d.xfer); if (lv) { limbo.delete(d.xfer); try { if (!lv.webContents.isDestroyed()) lv.webContents.close({ waitForBeforeUnload: false }); } catch (_) {} } }, 20000);   // never adopted → don't leak
+  } catch (_) {}
+});
+ipcMain.on('view-adopt', (e, d) => {
+  try {
+    const w = senderWin(e); if (!w) return;
+    const v = limbo.get(d.xfer); if (!v) return;
+    limbo.delete(d.xfer);
+    w.contentView.addChildView(v);
+    if (w._chromeFull) chromeToTop(w); else chromeToBottom(w);   // keep the chrome layered correctly over the adopted view
+    try { v.setVisible(false); } catch (_) {}
+    guestViews.set(gKey(e.sender.id, d.vid), v);
+    viewMeta.set(v.webContents.id, { win: w, vid: d.vid });   // events + popups + shortcuts now route to the new window/vid
+  } catch (_) {}
 });
 ipcMain.on('view-nav', (e, d) => { const v = gResolve(e, d.vid); if (!v) return; const wc = v.webContents; try { if (d.action === 'load') wc.loadURL(d.url).catch(() => {}); else if (d.action === 'reload') wc.reload(); else if (d.action === 'back') { if (wc.navigationHistory.canGoBack()) wc.navigationHistory.goBack(); } else if (d.action === 'forward') { if (wc.navigationHistory.canGoForward()) wc.navigationHistory.goForward(); } } catch (_) {} });
 ipcMain.on('view-zoom', (e, d) => { const v = gResolve(e, d.vid); if (v) try { v.webContents.setZoomFactor(d.factor); } catch (_) {} });
