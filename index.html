@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="color-scheme" content="dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'">
+<title>Materia Browser</title>
+<link rel="stylesheet" href="chrome.css">
+</head>
+<body>
+
+  <div id="titlebar">
+    <div class="brand" title="Materia Browser">
+      <span class="brand-name">MATERIA</span>
+    </div>
+    <div id="tabs"></div>
+    <button id="newtab" class="iconbtn tab-add" title="New tab (Ctrl+T)">+</button>
+    <div class="drag-spacer"></div>
+    <div id="wincontrols">
+      <button id="w-min" class="wbtn" title="Minimize">&#xFF0D;</button>
+      <button id="w-max" class="wbtn" title="Maximize">&#x25A1;</button>
+      <button id="w-close" class="wbtn wbtn-close" title="Close">&#x2715;</button>
+    </div>
+  </div>
+
+  <div id="toolbar">
+    <button id="nav-back" class="navbtn" title="Back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+    <button id="nav-fwd" class="navbtn" title="Forward"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>
+    <button id="nav-reload" class="navbtn" title="Reload"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 8 16 8"/></svg></button>
+    <button id="nav-home" class="navbtn" title="Home"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.6 12 3l9 7.6"/><path d="M5.5 9.4V20h13V9.4"/></svg></button>
+    <div id="ws-switcher">
+      <button id="ws-current" class="navbtn" title="Workspaces"><span class="ws-orb"></span></button>
+      <div id="ws-menu" class="ws-menu hidden">
+        <input id="ws-new-input" class="ws-new-input hidden" type="text" maxlength="24" placeholder="Workspace name…" spellcheck="false">
+        <button id="ws-new" class="ws-new">&#x2b; New Workspace</button>
+      </div>
+    </div>
+    <div id="omnibox-wrap">
+      <span id="omni-lock" title="Connection">&#x1F50E;</span>
+      <input id="omnibox" type="text" spellcheck="false" autocomplete="off"
+             placeholder="Search privately, or enter a web address">
+      <span id="omni-shield" title="Ad &amp; tracker blocking — click to toggle"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 5v6c0 5 3.4 8.4 8 11 4.6-2.6 8-6 8-11V5z"/></svg></span>
+      <span id="bm-star" class="omni-star" title="Bookmark this page">&#x2606;</span>
+      <div id="omni-suggest" class="omni-suggest"></div>
+    </div>
+    <button id="nav-mm" class="navbtn" title="Go to MarrowMyth.com"><img src="assets/whitelogo.webp" alt="MarrowMyth"></button>
+    <button id="nav-notes" class="navbtn" title="Notes &amp; reminders"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h8a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><line x1="9" y1="9" x2="15" y2="9"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg></button>
+    <button id="nav-update" class="navbtn nav-update hidden" title="Update available"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v11"/><polyline points="7 9 12 14 17 9"/><path d="M5 20h14"/></svg></button>
+    <button id="nav-settings" class="navbtn" title="Settings">&#x2699;</button>
+  </div>
+
+  <div id="bookmarks">
+    <div id="bm-list" class="bm-list"></div>
+    <div id="bm-socials" class="bm-socials-row"></div>
+  </div>
+
+  <div id="loadbar"></div>
+
+  <div id="findbar" class="findbar hidden">
+    <input id="find-input" type="text" placeholder="Find on page" spellcheck="false" autocomplete="off">
+    <span id="find-count" class="find-count"></span>
+    <button id="find-prev" class="find-btn" title="Previous (Shift+Enter)">&#x2039;</button>
+    <button id="find-next" class="find-btn" title="Next (Enter)">&#x203A;</button>
+    <button id="find-close" class="find-btn" title="Close (Esc)">&#x2715;</button>
+  </div>
+
+  <div id="views"></div>
+
+  <div id="settings" class="panel hidden">
+    <div class="panel-card">
+      <div class="panel-head">
+        <img src="assets/emblem.webp" class="panel-emblem" alt="">
+        <div>
+          <h2>Settings</h2>
+          <p class="panel-sub">Materia Browser &mdash; private by design</p>
+        </div>
+        <button id="settings-close" class="iconbtn" title="Close">&#x2715;</button>
+      </div>
+
+      <div class="set-block">
+        <p class="set-heading">Appearance</p>
+        <p class="set-label" style="margin-bottom:4px">Color scheme</p>
+        <div class="theme-swatches" id="theme-swatches">
+          <div class="swatch" data-t="materia" title="Materia"></div>
+          <div class="swatch" data-t="crimson" title="Crimson"></div>
+          <div class="swatch" data-t="cobalt" title="Cobalt"></div>
+          <div class="swatch" data-t="amethyst" title="Amethyst"></div>
+          <div class="swatch" data-t="obsidian" title="Obsidian"></div>
+        </div>
+        <div class="set-row" style="margin-top:1.2rem">
+          <div>
+            <p class="set-label">Manual zoom &amp; window scaling</p>
+            <p class="set-note">Zoom any page with Ctrl&nbsp;+ , Ctrl&nbsp;− , Ctrl&nbsp;0, or Ctrl + mouse wheel — always on. The toggle also auto-scales pages as you resize the window (off by default; it can make some sites switch to their mobile layout).</p>
+          </div>
+          <label class="switch"><input type="checkbox" id="toggle-scale"><span class="slider"></span></label>
+        </div>
+      </div>
+
+      <div class="set-block">
+        <p class="set-heading">Notes</p>
+        <div class="set-row">
+          <div>
+            <p class="set-label">Show Notes button</p>
+            <p class="set-note">Show the Notes button in the toolbar. Turn it off to hide it — you can still open Notes from here, and a due reminder will glow the settings gear instead.</p>
+          </div>
+          <label class="switch"><input type="checkbox" id="toggle-notes-btn"><span class="slider"></span></label>
+        </div>
+        <button id="open-notes-here" class="notes-open-btn">Open Notes</button>
+      </div>
+
+      <div class="set-block">
+        <p class="set-heading">Region &amp; language</p>
+        <div class="set-row">
+          <div>
+            <p class="set-label">Preferred page language</p>
+            <p class="set-note">Tells sites which language to serve, overriding your location (so you stop getting pages in the local language). New page loads switch immediately; a restart makes it stick everywhere.</p>
+          </div>
+          <select id="lang-select" class="mat-select">
+            <option value="en-US">English (US)</option>
+            <option value="en-GB">English (UK)</option>
+            <option value="es">Spanish</option>
+            <option value="fr">French</option>
+            <option value="de">German</option>
+            <option value="pt">Portuguese</option>
+            <option value="it">Italian</option>
+            <option value="ja">Japanese</option>
+            <option value="ko">Korean</option>
+            <option value="zh">Chinese</option>
+            <option value="th">Thai</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="set-block">
+        <p class="set-heading">Search</p>
+        <p class="set-note" style="margin-bottom:.5rem">Engine (or AI) used by the address bar and the new-tab search — stays in sync with the start-page picker.</p>
+        <select id="provider-select" class="mat-select"></select>
+      </div>
+
+      <div class="set-block">
+        <p class="set-heading">Privacy</p>
+        <div class="set-row">
+          <div>
+            <p class="set-label">Block ads, trackers &amp; pop-ups</p>
+            <p class="set-note">Real-time ad &amp; tracker blocking plus cookie-banner, overlay, pop-up and pop-under removal (EasyList / Fanboy filters). Never touches your logins.</p>
+          </div>
+          <label class="switch"><input type="checkbox" id="toggle-trackers"><span class="slider"></span></label>
+        </div>
+        <p id="adblock-status" class="set-note" style="margin-top:.5rem"></p>
+        <div class="set-row" style="margin-top:1.2rem">
+          <div>
+            <p class="set-label">Force-enable right-click &amp; copy</p>
+            <p class="set-note">Re-enables the context menu, text selection, and copy on sites that block them.</p>
+          </div>
+          <label class="switch"><input type="checkbox" id="toggle-rightclick"><span class="slider"></span></label>
+        </div>
+        <p class="set-note" style="margin-top:1rem"><svg class="btn-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Encrypted DNS (DoH), WebRTC IP-leak protection, and Safe Browsing (known phishing &amp; malware sites are blocked) are always on.</p>
+      </div>
+
+      <div class="set-block">
+        <p class="set-heading">History</p>
+        <button id="open-history" class="action-btn"><svg class="btn-ico" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 16 14"/></svg>View browsing history</button>
+      </div>
+
+      <div class="set-block">
+        <p class="set-heading">Downloads</p>
+        <p class="set-note" style="margin-bottom:.4rem">Everything defaults to your system Downloads folder — set a different folder per file type below.</p>
+        <div id="dl-dirs"></div>
+        <button id="open-downloads" class="action-btn" style="margin-top:.6rem"><svg class="btn-ico" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>View downloads</button>
+      </div>
+
+      <div class="set-block">
+        <p class="set-heading">Video downloader</p>
+        <p class="set-note" style="margin-bottom:.5rem">Paste any video link — YouTube, Vimeo, X, and thousands more (powered by yt-dlp). Saves to your Videos folder. First use fetches the engine (~15&nbsp;MB).</p>
+        <input id="vd-url" class="mat-input" type="text" spellcheck="false" placeholder="https://…">
+        <div class="vd-row">
+          <select id="vd-quality" class="mat-select">
+            <option value="best">Best quality</option>
+            <option value="1080">1080p</option>
+            <option value="720">720p</option>
+            <option value="480">480p</option>
+            <option value="audio">Audio only (m4a)</option>
+          </select>
+          <button id="vd-go" class="action-btn action-primary">Download</button>
+        </div>
+        <p id="vd-status" class="set-note" style="margin-top:.45rem"></p>
+      </div>
+
+      <div class="set-block">
+        <p class="set-heading">Your Socials</p>
+        <p class="set-note" style="margin-bottom:.9rem">Paste your profile link next to any platform. Each one you fill in shows up as an icon on the right of the bookmarks bar and opens <em>your</em> page. <b>Right-clicking your social media icon copies a link to your social media to share.</b></p>
+        <div id="socials-settings" class="socials-settings"></div>
+      </div>
+
+      <div class="set-block">
+        <p class="set-heading">Your Data</p>
+        <p class="set-note" style="margin-bottom:1rem">Materia keeps your logins on this device only and never lets sites maintain a persistent profile of you across the web. Clear your trail any time:</p>
+        <button id="clear-keep" class="action-btn action-primary"><svg class="btn-ico" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>Clear Everything &mdash; Keep Me Logged In</button>
+        <p class="set-note" style="margin:.5rem 0 1.1rem">Wipes cache, service workers, and site junk. Your cookies &amp; sign-ins stay put.</p>
+        <button id="clear-all" class="action-btn action-danger"><svg class="btn-ico" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>Clear Everything &mdash; Sign Me Out</button>
+        <p class="set-note" style="margin-top:.5rem">The full reset: cache, history, cookies, and logins, all gone.</p>
+        <p id="clear-status" class="clear-status"></p>
+      </div>
+
+      <div class="set-block">
+        <p class="set-heading">Information &amp; Terms</p>
+        <p class="set-note" style="line-height:1.55">
+          <b>Materia Browser</b> <span class="ver">v0.1</span> — a free, privacy-first browser by MarrowMyth, powered by Materia. Built by F.C. Marrow.<br><br>
+          <b>Terms of use</b><br>
+          • Provided free, for personal use, as-is and without warranty — you use it at your own discretion.<br>
+          • Privacy is the point: your logins and data stay on this device. Materia sends no telemetry, analytics, or browsing data to us or anyone. Encrypted DNS and WebRTC-leak protection are on by default.<br>
+          • Materia bundles open-source tools (the Ghostery ad-filter engine, EasyList / Fanboy lists, and yt-dlp). They belong to their authors under their own licenses; anything you download is your responsibility — respect the terms and copyright of the sites you visit.<br>
+          • Please don't use Materia for unlawful purposes.<br>
+          • &ldquo;MarrowMyth&rdquo;, &ldquo;Materia&rdquo;, and the Materia Browser artwork are property of MarrowMyth. The engine is Chromium, via Electron, &copy; their respective authors.<br><br>
+          &copy; 2026 MarrowMyth &middot; Powered by Materia &middot; All rights reserved.
+        </p>
+      </div>
+
+      <div class="set-block set-kofi">
+        <p class="set-note" style="margin-bottom:.7rem; text-align:center">Materia Browser is free. If it's earning its place in your day, you can help keep it moving:</p>
+        <button id="info-kofi" class="action-btn action-primary"><svg class="btn-ico" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 1 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8z"/></svg>Support development on Ko-fi</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="list-panel" class="panel hidden">
+    <div class="panel-card">
+      <div class="panel-head">
+        <img src="assets/emblem.webp" class="panel-emblem" alt="">
+        <div><h2 id="list-title">History</h2><p class="panel-sub">Materia Browser</p></div>
+        <button id="list-clear" class="iconbtn" title="Clear"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
+        <button id="list-close" class="iconbtn" title="Close">&#x2715;</button>
+      </div>
+      <div id="history-list" class="list-scroll-full"></div>
+      <div id="downloads-list" class="list-scroll-full"></div>
+    </div>
+  </div>
+
+  <div id="notes-panel" class="panel hidden">
+    <div class="panel-card">
+      <div class="panel-head">
+        <img src="assets/emblem.webp" class="panel-emblem" alt="">
+        <div><h2>Notes</h2><p class="panel-sub">Quick notes &amp; reminders</p></div>
+        <button id="notes-close" class="iconbtn" title="Close">&#x2715;</button>
+      </div>
+      <div id="notes-tabs" class="notes-tabs"></div>
+      <div id="notes-grid" class="notes-grid"></div>
+      <button id="notes-add" class="notes-add-btn">+ New note</button>
+      <div id="notes-editor" class="notes-editor hidden">
+        <input id="note-title" class="note-input" type="text" placeholder="Title" spellcheck="false" maxlength="120">
+        <textarea id="note-body" class="note-textarea" placeholder="Write your note&hellip;" spellcheck="false"></textarea>
+        <div class="note-quick" id="note-quick">
+          <button type="button" class="note-quick-btn" data-when="today">Today</button>
+          <button type="button" class="note-quick-btn" data-when="tomorrow">Tomorrow</button>
+          <button type="button" class="note-quick-btn" data-when="nextday">Next day</button>
+          <button type="button" class="note-quick-btn" data-when="daily">Every day</button>
+        </div>
+        <div class="note-due-row">
+          <span class="note-due-lbl">Reminder</span>
+          <input id="note-due" class="note-due" type="datetime-local">
+          <button id="note-due-clear" class="note-due-clear" title="Clear reminder">&#x2715;</button>
+        </div>
+        <div class="note-due-row">
+          <span class="note-due-lbl">Priority</span>
+          <select id="note-prio" class="note-due">
+            <option value="2">High</option>
+            <option value="1">Normal</option>
+            <option value="0">Low</option>
+          </select>
+        </div>
+        <div class="note-editor-actions">
+          <button id="note-save" class="note-save">Save</button>
+          <button id="note-cancel" class="note-cancel">Cancel</button>
+          <button id="note-delete" class="note-delete">Delete</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="mini-toast" class="mini-toast"></div>
+
+  <div id="popup-toast" class="popup-toast">
+    <span class="popup-toast-ico">&#x1F6E1;</span>
+    <div class="popup-toast-msg">
+      <span class="popup-toast-text">Pop-up blocked</span>
+      <span id="popup-toast-host"></span>
+    </div>
+    <button id="popup-toast-open" class="popup-toast-open">Open</button>
+    <button id="popup-toast-dismiss" class="popup-toast-x" title="Dismiss">&#x2715;</button>
+  </div>
+
+<script src="socials-data.js"></script>
+<script src="chrome.js"></script>
+</body>
+</html>

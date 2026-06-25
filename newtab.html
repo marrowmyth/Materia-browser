@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="color-scheme" content="dark">
+<title>Materia</title>
+<style>
+  :root{ --teal:#33d1bd; --teal-bright:#cdf7f0; --teal-dim:#11665c; --bg:#061215; --ink:#dae7ec; --faint:#5e8082; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--bg); color:var(--ink); overflow:hidden;
+    font-family:'Segoe UI',system-ui,-apple-system,Roboto,Arial,sans-serif;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    transition:background .25s;
+  }
+  body::before{ content:''; position:fixed; inset:0; pointer-events:none; z-index:0;
+    background:
+      radial-gradient(circle,rgba(150,160,165,.04) 1px,transparent 1px),
+      radial-gradient(ellipse 60% 55% at 50% 42%,color-mix(in srgb,var(--teal) 16%,transparent),transparent 70%);
+    background-size:30px 30px,100% 100%;
+  }
+  .wrap{position:relative; z-index:1; display:flex; flex-direction:column; align-items:center; width:min(620px,88vw); margin-top:-4vh}
+  .emblem{width:96px; height:96px; object-fit:contain; filter:drop-shadow(0 0 26px color-mix(in srgb,var(--teal) 55%,transparent)); animation:pulse 5s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:.92}50%{opacity:1}}
+  h1{
+    margin-top:1.3rem; font-size:clamp(1.6rem,4vw,2.5rem); font-weight:700; letter-spacing:.42em; text-indent:.42em;
+    background:linear-gradient(105deg,var(--teal-dim),var(--teal),var(--teal-bright),var(--teal),var(--teal-dim));
+    -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
+  }
+  .tag{margin-top:.7rem; font-size:.66rem; letter-spacing:.34em; text-transform:uppercase; color:var(--faint); font-family:'Cascadia Mono',Consolas,monospace}
+  form{margin-top:2.6rem; width:100%; display:flex; align-items:center; gap:10px;
+    background:color-mix(in srgb,var(--bg) 80%,#000); border:1px solid color-mix(in srgb,var(--teal) 30%,transparent); border-radius:30px; padding:0 8px; height:54px;
+    transition:border-color .2s,box-shadow .2s;}
+  form:focus-within{border-color:var(--teal); box-shadow:0 0 0 4px color-mix(in srgb,var(--teal) 12%,transparent)}
+  .pwrap{position:relative; flex:none}
+  #provider-btn{display:flex; align-items:center; gap:7px; height:40px; padding:0 13px 0 10px; border:none; background:transparent; color:var(--ink); cursor:pointer; font-family:inherit; font-size:13px; white-space:nowrap; border-right:1px solid color-mix(in srgb,var(--teal) 22%,transparent)}
+  #provider-btn:hover{color:var(--teal-bright)}
+  .picon{width:9px; height:9px; border-radius:50%; flex:none; background:var(--teal); box-shadow:0 0 7px var(--teal)}
+  .picon.ai{background:#c98bff; box-shadow:0 0 7px #c98bff}
+  .pcaret{font-size:9px; opacity:.55}
+  .pmenu{position:absolute; top:50px; left:0; display:flex; gap:6px; background:color-mix(in srgb,var(--teal) 8%,var(--bg)); border:1px solid color-mix(in srgb,var(--teal) 28%,transparent); border-radius:13px; box-shadow:0 18px 44px rgba(0,0,0,.65); padding:8px; z-index:5}
+  .pmenu.hidden{display:none}
+  .pm-col{display:flex; flex-direction:column; min-width:150px}
+  .pm-label{font-size:9px; letter-spacing:.18em; text-transform:uppercase; color:var(--faint); padding:3px 9px 5px}
+  .pm-item{display:flex; align-items:center; gap:8px; padding:7px 9px; border:none; background:transparent; color:var(--ink); cursor:pointer; border-radius:7px; font-family:inherit; font-size:12.5px; text-align:left; white-space:nowrap}
+  .pm-item:hover{background:color-mix(in srgb,var(--teal) 15%,transparent)}
+  .pm-item.active{background:color-mix(in srgb,var(--teal) 24%,transparent)}
+  .pm-dot{width:7px; height:7px; border-radius:50%; flex:none}
+  .pm-dot.search{background:var(--teal)}
+  .pm-dot.ai{background:#c98bff}
+  .pm-shield{flex:none; margin-left:auto; color:var(--teal); opacity:.85; display:flex}
+  input{flex:1; min-width:0; background:transparent; border:none; outline:none; color:var(--ink); font-size:15px; font-family:inherit}
+  input::placeholder{color:var(--faint)}
+  .go{height:40px; padding:0 22px; border:none; border-radius:22px; cursor:pointer; font-weight:600; font-size:.82rem; letter-spacing:.06em; color:#04221d; background:linear-gradient(135deg,var(--teal),var(--teal-dim))}
+  .go:hover{filter:brightness(1.12)}
+  .foot{position:fixed; bottom:22px; z-index:1; font-size:.6rem; letter-spacing:.22em; text-transform:uppercase; color:#3f585b; font-family:'Cascadia Mono',Consolas,monospace}
+  .foot b{color:var(--teal-dim)}
+  .donate{position:fixed; right:20px; bottom:18px; z-index:2; display:flex; align-items:center; gap:7px; padding:8px 15px; border-radius:22px; font-size:11.5px; letter-spacing:.03em; text-decoration:none; color:var(--bg); font-weight:700; background:linear-gradient(135deg,var(--teal),var(--teal-dim)); box-shadow:0 6px 20px color-mix(in srgb,var(--teal) 32%,transparent); transition:filter .15s, transform .15s; font-family:'Segoe UI',system-ui,sans-serif}
+  .donate:hover{filter:brightness(1.12); transform:translateY(-1px)}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <img class="emblem" src="assets/emblem.webp" alt="Materia">
+    <h1>MATERIA</h1>
+    <p class="tag">Private &middot; Yours &middot; Powered by Materia</p>
+    <form id="s">
+      <div class="pwrap">
+        <button type="button" id="provider-btn" title="Choose search engine or AI">
+          <span id="provider-icon" class="picon"></span><span id="provider-name">DuckDuckGo</span><span class="pcaret">&#x25BE;</span>
+        </button>
+        <div id="provider-menu" class="pmenu hidden"></div>
+      </div>
+      <input id="q" type="text" spellcheck="false" autocomplete="off" placeholder="Search privately, ask an AI, or type a URL">
+      <button type="submit" class="go">Go</button>
+    </form>
+  </div>
+  <p class="foot">&copy; 2026 MarrowMyth &middot; Powered by <b>Materia</b> &middot; All rights reserved</p>
+  <a class="donate" href="https://ko-fi.com/marrowmyth">&#x2665; Donate to help us keep moving</a>
+<script>
+  // apply the active color scheme passed from the chrome
+  var THEMES = {
+    materia:['#33d1bd','#11665c','#cdf7f0','#061215'],
+    crimson:['#e1554d','#7a201c','#ffd2cc','#190809'],
+    cobalt:['#4f93f2','#1d3f73','#d2e4ff','#080f20'],
+    amethyst:['#a96ff2','#3f2273','#e6d4ff','#0f0822'],
+    obsidian:['#c2ced3','#46585d','#eef4f6','#0b0d0f']
+  };
+  var EMBLEM = { materia:'', crimson:'hue-rotate(178deg) saturate(1.3)', cobalt:'hue-rotate(44deg) saturate(1.2)', amethyst:'hue-rotate(95deg) saturate(1.2)', obsidian:'grayscale(1) brightness(1.3)' };
+  // exposed so the chrome can retint this page live (no reload) when you switch workspaces/schemes
+  window.__setTheme = function (t) {
+    var c = THEMES[t] || THEMES.materia;
+    var r = document.documentElement.style;
+    r.setProperty('--teal', c[0]); r.setProperty('--teal-dim', c[1]); r.setProperty('--teal-bright', c[2]); r.setProperty('--bg', c[3]);
+    var em = document.querySelector('.emblem'); if (em) em.style.filter = (EMBLEM[t] || '') + ' drop-shadow(0 0 26px ' + c[0] + ')';
+  };
+  window.__setTheme(new URLSearchParams(location.search).get('t') || 'materia');
+
+  var PROVIDERS = [
+    { id: 'ddg', name: 'DuckDuckGo', kind: 'search', priv: true, url: 'https://duckduckgo.com/?q=%s&kp=-2' },
+    { id: 'startpage', name: 'Startpage', kind: 'search', priv: true, url: 'https://www.startpage.com/sp/search?query=%s' },
+    { id: 'brave', name: 'Brave Search', kind: 'search', priv: true, url: 'https://search.brave.com/search?q=%s' },
+    { id: 'google', name: 'Google', kind: 'search', url: 'https://www.google.com/search?q=%s' },
+    { id: 'bing', name: 'Bing', kind: 'search', url: 'https://www.bing.com/search?q=%s' },
+    { id: 'chatgpt', name: 'ChatGPT', kind: 'ai', url: 'https://chatgpt.com/?q=%s', base: 'https://chatgpt.com/' },
+    { id: 'claude', name: 'Claude', kind: 'ai', url: 'https://claude.ai/new?q=%s', base: 'https://claude.ai/new' },
+    { id: 'gemini', name: 'Gemini', kind: 'ai', url: 'https://gemini.google.com/app?q=%s', base: 'https://gemini.google.com/app' },
+    { id: 'grok', name: 'Grok', kind: 'ai', url: 'https://grok.com/?q=%s', base: 'https://grok.com/' },
+    { id: 'perplexity', name: 'Perplexity', kind: 'ai', url: 'https://www.perplexity.ai/search?q=%s', base: 'https://www.perplexity.ai/' }
+  ];
+  var pid = (window.__mmProv && window.__mmProv.get()) || localStorage.getItem('materia-provider') || 'ddg';
+  function curP() { for (var i = 0; i < PROVIDERS.length; i++) { if (PROVIDERS[i].id === pid) return PROVIDERS[i]; } return PROVIDERS[0]; }
+  function renderProviderBtn() { var p = curP(); document.getElementById('provider-name').textContent = p.name; document.getElementById('provider-icon').className = 'picon ' + p.kind; }
+  var SHIELD = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 5v6c0 5 3.4 8.4 8 11 4.6-2.6 8-6 8-11V5z"/></svg>';
+  function buildMenu() {
+    var menu = document.getElementById('provider-menu'); menu.innerHTML = '';
+    [['Search', 'search'], ['AI', 'ai']].forEach(function (grp) {
+      var col = document.createElement('div'); col.className = 'pm-col';
+      var lbl = document.createElement('div'); lbl.className = 'pm-label'; lbl.textContent = grp[0]; col.appendChild(lbl);
+      PROVIDERS.filter(function (p) { return p.kind === grp[1]; }).forEach(function (p) {
+        var b = document.createElement('button'); b.type = 'button'; b.className = 'pm-item' + (p.id === pid ? ' active' : ''); b.title = p.priv ? 'Privacy-friendly' : '';
+        var dot = document.createElement('span'); dot.className = 'pm-dot ' + p.kind; b.appendChild(dot);
+        var nm = document.createElement('span'); nm.textContent = p.name; b.appendChild(nm);
+        if (p.priv) { var sh = document.createElement('span'); sh.className = 'pm-shield'; sh.innerHTML = SHIELD; b.appendChild(sh); }
+        b.addEventListener('click', function (ev) { ev.stopPropagation(); pid = p.id; localStorage.setItem('materia-provider', pid); if (window.__mmProv) window.__mmProv.set(pid); renderProviderBtn(); buildMenu(); document.getElementById('provider-menu').classList.add('hidden'); document.getElementById('q').focus(); });
+        col.appendChild(b);
+      });
+      menu.appendChild(col);
+    });
+  }
+  document.getElementById('provider-btn').addEventListener('click', function (e) { e.stopPropagation(); document.getElementById('provider-menu').classList.toggle('hidden'); });
+  document.getElementById('provider-menu').addEventListener('click', function (e) { e.stopPropagation(); });
+  document.addEventListener('click', function () { document.getElementById('provider-menu').classList.add('hidden'); });
+  renderProviderBtn(); buildMenu();
+
+  document.getElementById('s').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var s = document.getElementById('q').value.trim(); if (!s) return;
+    var p = curP();
+    if (/^(https?|file):/i.test(s)) { location.href = s; return; }
+    if (p.kind === 'ai' && p.base && window.__mmAI) { window.__mmAI.send(p.base, s); return; }
+    if (p.kind === 'search' && !/\s/.test(s) && /^[^\s.]+\.[^\s.]{2,}/.test(s)) { location.href = 'https://' + s; return; }
+    location.href = p.url.replace('%s', encodeURIComponent(s));
+  });
+</script>
+</body>
+</html>

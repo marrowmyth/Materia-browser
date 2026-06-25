@@ -1,0 +1,46 @@
+'use strict';
+const { contextBridge, ipcRenderer } = require('electron');
+
+contextBridge.exposeInMainWorld('materia', {
+  winMin: () => ipcRenderer.send('win-min'),
+  winMax: () => ipcRenderer.send('win-max'),
+  winClose: () => ipcRenderer.send('win-close'),
+  toggleFullscreen: () => ipcRenderer.invoke('toggle-fullscreen'),
+  focusChrome: () => ipcRenderer.send('focus-chrome'),
+  onAIQuery: (cb) => ipcRenderer.on('ai-query', (e, d) => cb(d)),
+  onFullscreen: (cb) => ipcRenderer.on('fullscreen', (e, on) => cb(on)),
+  onWinState: (cb) => ipcRenderer.on('win-state', (e, max) => cb(max)),
+
+  registerView: (wcId) => ipcRenderer.send('register-view', wcId),
+  onOpenTab: (cb) => ipcRenderer.on('open-tab', (e, data) => cb(data)),
+  onPopupBlocked: (cb) => ipcRenderer.on('popup-blocked', (e, url) => cb(url)),
+  onShortcut: (cb) => ipcRenderer.on('shortcut', (e, c) => cb(c)),
+  onZoomWheel: (cb) => ipcRenderer.on('zoom-wheel', (e, dir) => cb(dir)),
+  onDownload: (cb) => ipcRenderer.on('download', (e, d) => cb(d)),
+  openPath: (p) => ipcRenderer.invoke('open-path', p),
+  showItem: (p) => ipcRenderer.invoke('show-item', p),
+  getDlDirs: () => ipcRenderer.invoke('get-dl-dirs'),
+  pickDlDir: (cat) => ipcRenderer.invoke('pick-dl-dir', cat),
+  resetDlDir: (cat) => ipcRenderer.invoke('reset-dl-dir', cat),
+  ytdlpDownload: (url, quality) => ipcRenderer.invoke('ytdlp-download', url, quality),
+  onYtdlp: (cb) => ipcRenderer.on('ytdlp', (e, d) => cb(d)),
+  onYtdlpProgress: (cb) => ipcRenderer.on('ytdlp-progress', (e, p) => cb(p)),
+  copyText: (t) => ipcRenderer.invoke('copy-text', t),
+
+  clearData: (partition, keepLogins) => ipcRenderer.invoke('clear-data', partition, keepLogins),
+  ensurePartition: (partition) => ipcRenderer.invoke('ensure-partition', partition),
+  setBlockTrackers: (v) => ipcRenderer.invoke('set-block-trackers', v),
+  adblockStatus: () => ipcRenderer.invoke('adblock-status'),
+  getSettings: () => ipcRenderer.invoke('get-settings'),
+  setLanguage: (v) => ipcRenderer.invoke('set-language', v),
+  suggest: (q) => ipcRenderer.invoke('suggest', q),
+  getProvider: () => { try { return ipcRenderer.sendSync('mm-get-provider'); } catch (_) { return 'ddg'; } },
+  setProvider: (id) => ipcRenderer.invoke('set-provider', id),
+  getCosmetics: (url) => ipcRenderer.invoke('get-cosmetics', url),
+  openExternal: (url) => ipcRenderer.invoke('open-external', url),
+  notify: (data) => ipcRenderer.send('notify', data),
+  openInNewWindow: (url, wsId) => ipcRenderer.send('open-in-new-window', { url, wsId }),
+  tabDroppedOut: (data) => ipcRenderer.send('tab-dropped-out', data),
+  copyWorkspaceCookies: (from, to) => ipcRenderer.invoke('copy-workspace-cookies', from, to),
+  onUpdateAvailable: (cb) => ipcRenderer.on('update-available', (e, d) => cb(d))
+});

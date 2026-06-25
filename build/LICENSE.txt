@@ -1,0 +1,19 @@
+Materia Browser - Terms of Use
+(c) 2026 MarrowMyth . Powered by Materia . All rights reserved.
+
+Materia Browser is a free, privacy-first web browser by MarrowMyth.
+
+- Provided free, for personal use, as-is and without warranty - you use it at
+  your own discretion.
+- Privacy is the point: your logins and data stay on this device. Materia sends
+  no telemetry, analytics, or browsing data to us or anyone. Encrypted DNS,
+  WebRTC-leak protection, and Safe Browsing are on by default.
+- Materia bundles open-source tools (the Ghostery ad-filter engine, EasyList /
+  Fanboy lists, and yt-dlp). They belong to their authors under their own
+  licenses; anything you download is your responsibility - respect the terms and
+  copyright of the sites you visit.
+- Please don't use Materia for unlawful purposes.
+- "MarrowMyth", "Materia", and the Materia Browser artwork are property of
+  MarrowMyth. The engine is Chromium, via Electron, (c) their respective authors.
+
+By installing, you accept these terms.
