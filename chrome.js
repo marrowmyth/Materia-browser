@@ -3,7 +3,7 @@
 const THEMES = ['materia', 'crimson', 'cobalt', 'amethyst', 'obsidian'];
 let currentTheme = localStorage.getItem('materia-theme') || 'materia';
 let forceRightClick = localStorage.getItem('materia-rightclick') !== '0';
-function newtabUrl() { return 'newtab.html?t=' + currentTheme; }
+function newtabUrl() { const rel = 'newtab.html?t=' + currentTheme; try { return new URL(rel, location.href).href; } catch (_) { return rel; } }
 const NT_PRELOAD = (function () { try { return new URL('mm-nt-preload.js', location.href).href; } catch (_) { return ''; } })();
 const OMNI_ICONS = {
   search: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>',
@@ -100,19 +100,52 @@ function isNewtab(url) { return !url || url.includes('newtab.html') || url === '
 function prettyUrl(url) { return isNewtab(url) ? '' : url; }
 
 /* ---------- tabs ---------- */
+// ---- WebContentsView proxy: a tab's `view` looks like the old <webview> but drives a main-owned view over IPC ----
+const viewState = {};   // vid -> { url, canBack, canForward } (cached so canGoBack/getURL stay synchronous)
+function makeViewProxy(vid) {
+  const L = {};   // event name -> [listeners]
+  return {
+    _vid: vid, _L: L,
+    addEventListener: (ev, fn) => { (L[ev] = L[ev] || []).push(fn); },
+    _emit: (ev, payload) => { (L[ev] || []).forEach(fn => { try { fn(payload); } catch (_) {} }); },
+    loadURL: (u) => window.materia.viewNav({ vid: vid, action: 'load', url: u }),
+    reload: () => window.materia.viewNav({ vid: vid, action: 'reload' }),
+    goBack: () => window.materia.viewNav({ vid: vid, action: 'back' }),
+    goForward: () => window.materia.viewNav({ vid: vid, action: 'forward' }),
+    canGoBack: () => !!(viewState[vid] && viewState[vid].canBack),
+    canGoForward: () => !!(viewState[vid] && viewState[vid].canForward),
+    getURL: () => (viewState[vid] ? viewState[vid].url : ''),
+    setZoomFactor: (f) => window.materia.viewZoom({ vid: vid, factor: f }),
+    setAudioMuted: (m) => window.materia.viewMute({ vid: vid, muted: m }),
+    findInPage: (t, o) => window.materia.viewFind({ vid: vid, action: 'find', text: t, opts: o }),
+    stopFindInPage: (a) => window.materia.viewFind({ vid: vid, action: 'stop', arg: a }),
+    print: () => window.materia.viewPrint({ vid: vid }),
+    insertCSS: (css) => { window.materia.viewCss({ vid: vid, css: css }); return Promise.resolve(); },
+    executeJavaScript: (js, ug) => window.materia.viewExec({ vid: vid, js: js, userGesture: ug }),
+    blur: () => {},
+    remove: () => { window.materia.viewDestroy({ vid: vid }); delete viewState[vid]; }
+  };
+}
+window.materia.onViewEvent((d) => {
+  const tab = tabs.find(t => t.id === d.vid); if (!tab || !tab.view || !tab.view._emit) return;
+  const p = d.payload || {};
+  if (d.event === 'did-navigate' || d.event === 'did-navigate-in-page') {
+    viewState[d.vid] = viewState[d.vid] || {};
+    viewState[d.vid].url = p.url; viewState[d.vid].canBack = p.canBack; viewState[d.vid].canForward = p.canForward;
+    tab.view._emit(d.event, {});
+  } else if (d.event === 'page-title-updated') tab.view._emit(d.event, { title: p.title });
+  else if (d.event === 'page-favicon-updated') tab.view._emit(d.event, { favicons: p.favicons });
+  else if (d.event === 'found-in-page') tab.view._emit(d.event, { result: p.result });
+  else tab.view._emit(d.event, {});
+});
 function makeTab(wsId, url, pinned) {
   const target = url || newtabUrl();
   ensureWs(wsId);
   const id = ++seq;
-  const view = document.createElement('webview');
-  view.setAttribute('partition', wsPartition(wsId));
-  view.setAttribute('allowpopups', '');
-  view.setAttribute('plugins', '');   // enable Chromium's built-in PDF viewer
-  view.setAttribute('webpreferences', 'backgroundThrottling=yes');   // throttle background/hidden tabs
-  if (NT_PRELOAD) view.setAttribute('preload', NT_PRELOAD);
-  view.setAttribute('src', target);
-  viewsEl.appendChild(view);
-  const tab = { id, wsId, view, title: 'New Tab', url: target, favicon: null, loading: false, pinned: !!pinned };
+  const tab = { id, wsId, title: 'New Tab', url: target, favicon: null, loading: false, pinned: !!pinned };
+  viewState[id] = { url: target, canBack: false, canForward: false };
+  tab.view = makeViewProxy(id);
+  window.materia.viewCreate({ vid: id, wsId: wsId, partition: wsPartition(wsId), url: target });
   tabs.push(tab);
   wireView(tab);
   return tab;
@@ -199,15 +232,17 @@ function renderTabs() {
 function layoutViews() {
   if (splitId && !tabs.some(t => t.id === splitId && t.wsId === activeWsId && t.id !== activeId)) splitId = null;
   const on = !!splitId;
-  viewsEl.classList.toggle('split', on);
+  const r = viewsEl.getBoundingClientRect();
+  const X = r.left, Y = r.top, W = r.width, H = r.height, halfW = Math.round(W / 2);
   tabs.forEach(t => {
     const left = t.id === activeId, right = on && t.id === splitId;
-    t.view.classList.toggle('active', !on && left);
-    t.view.classList.toggle('pane', on && (left || right));
-    t.view.classList.toggle('pane-left', on && left);
-    t.view.classList.toggle('pane-right', right);
+    if (on && left) window.materia.viewBounds({ vid: t.id, x: X, y: Y, width: halfW, height: H });
+    else if (right) window.materia.viewBounds({ vid: t.id, x: X + halfW, y: Y, width: W - halfW, height: H });
+    else if (!on && left) window.materia.viewBounds({ vid: t.id, x: X, y: Y, width: W, height: H });
+    else window.materia.viewHide({ vid: t.id });
   });
 }
+window.addEventListener('resize', () => { try { layoutViews(); } catch (_) {} });
 function openInSplit(id) {
   if (id === activeId || !tabs.some(t => t.id === id && t.wsId === activeWsId)) {
     const t = makeTab(activeWsId, null);   // spawn a fresh tab for the second pane
@@ -268,7 +303,6 @@ function wireView(tab) {
     if (c) c.textContent = r.matches ? (r.activeMatchOrdinal + ' / ' + r.matches) : 'No matches';
   });
   v.addEventListener('dom-ready', () => {
-    try { window.materia.registerView(v.getWebContentsId()); } catch (_) {}
     try { v.setZoomFactor(effectiveZoom()); } catch (_) {}
     if (isNewtab(tab.url)) { try { v.executeJavaScript('window.__setTheme&&window.__setTheme(' + JSON.stringify(currentTheme) + ')', true); } catch (_) {} }
     if (tab.focusOnReady) { tab.focusOnReady = false; try { omni.focus(); } catch (_) {} }   // new tab → cursor in the address bar
@@ -977,8 +1011,8 @@ function reopenSpecificClosed(c) {
 function toggleMute(t) { t.muted = !t.muted; try { t.view.setAudioMuted(t.muted); } catch (_) {} renderTabs(); showMini(t.muted ? 'Tab muted' : 'Tab unmuted'); }
 
 /* ---------- find in page ---------- */
-function showFind() { const fb = $('findbar'); if (!fb) return; fb.classList.remove('hidden'); const i = $('find-input'); i.focus(); i.select(); if (i.value.trim()) doFind(i.value); }
-function hideFind() { const fb = $('findbar'); if (fb) fb.classList.add('hidden'); const t = activeTab(); if (t) { try { t.view.stopFindInPage('clearSelection'); } catch (_) {} } const c = $('find-count'); if (c) c.textContent = ''; }
+function showFind() { const fb = $('findbar'); if (!fb) return; fb.classList.remove('hidden'); try { layoutViews(); } catch (_) {} const i = $('find-input'); i.focus(); i.select(); if (i.value.trim()) doFind(i.value); }
+function hideFind() { const fb = $('findbar'); if (fb) fb.classList.add('hidden'); try { layoutViews(); } catch (_) {} const t = activeTab(); if (t) { try { t.view.stopFindInPage('clearSelection'); } catch (_) {} } const c = $('find-count'); if (c) c.textContent = ''; }
 function doFind(text) { const t = activeTab(); const c = $('find-count'); if (!t || !text.trim()) { if (c) c.textContent = ''; try { t && t.view.stopFindInPage('clearSelection'); } catch (_) {} return; } try { t.view.findInPage(text); } catch (_) {} }
 function findNext(forward) { const t = activeTab(); const text = ($('find-input') || {}).value || ''; if (!t || !text.trim()) return; try { t.view.findInPage(text, { findNext: true, forward: forward }); } catch (_) {} }
 { const i = $('find-input'); if (i) { i.addEventListener('input', () => doFind(i.value)); i.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); findNext(!e.shiftKey); } else if (e.key === 'Escape') { e.preventDefault(); hideFind(); } }); } }
@@ -1039,7 +1073,7 @@ tabsEl.addEventListener('contextmenu', (e) => {
 });
 window.materia.onZoomWheel((dir) => setZoom(pageZoom + (dir === 'in' ? 0.1 : -0.1)));
 window.materia.onWinState(() => {});
-window.materia.onFullscreen((on) => document.body.classList.toggle('fullscreen', !!on));
+window.materia.onFullscreen((on) => { document.body.classList.toggle('fullscreen', !!on); try { layoutViews(); } catch (_) {} });
 
 /* ---------- history + downloads ---------- */
 let history = [];

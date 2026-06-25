@@ -502,7 +502,7 @@ ipcMain.on('view-create', (e, o) => {
   try {
     const w = BrowserWindow.fromWebContents(e.sender); if (!w) return;
     try { configurePartition(o.partition); } catch (_) {}
-    const view = new WebContentsView({ webPreferences: { partition: o.partition, preload: o.preload || undefined, contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: true } });
+    const view = new WebContentsView({ webPreferences: { partition: o.partition, preload: path.join(__dirname, 'mm-nt-preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: true } });
     try { view.setBackgroundColor('#061215'); } catch (_) {}
     w.contentView.addChildView(view);
     view.setVisible(false);
