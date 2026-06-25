@@ -229,10 +229,16 @@ function renderTabs() {
 }
 
 /* ---------- split view (two panes side by side in the same window) ---------- */
-// full-screen overlay (panel/modal) -> hide the page; a dropdown -> just clip the page's top so it shows above
+// confirm modal -> hide; right-side panel -> clip to its left (page stays beside it); dropdown -> clip the top
 function contentMode() {
-  const open = (id) => { const e = $(id); return !!(e && !e.classList.contains('hidden')); };
-  if (open('settings') || open('notes-panel') || open('list-panel') || document.querySelector('.confirm-ov')) return { hide: true };
+  if (document.querySelector('.confirm-ov')) return { hide: true };
+  for (const id of ['settings', 'notes-panel', 'list-panel']) {
+    const e = $(id);
+    if (e && !e.classList.contains('hidden')) {
+      const card = e.querySelector('.panel-card');
+      return card ? { clipRight: Math.round(card.getBoundingClientRect().left) } : { hide: true };
+    }
+  }
   const dropEl = (id) => { const e = $(id); return (e && e.classList.contains('open')) ? e : null; };
   const drops = [dropEl('omni-suggest'), dropEl('folder-pop'), dropEl('folder-pop-2')].filter(Boolean);
   if (drops.length) { let clipY = 0; drops.forEach(d => { const b = d.getBoundingClientRect().bottom; if (b > clipY) clipY = b; }); return { clipY: clipY }; }
@@ -245,6 +251,7 @@ function layoutViews() {
   const on = !!splitId;
   const r = viewsEl.getBoundingClientRect();
   let X = r.left, Y = r.top, W = r.width, H = r.height;
+  if (m.clipRight && m.clipRight > X) W = m.clipRight - X;   // side panel — keep the page to its left
   if (m.clipY && m.clipY > Y) { H = H - (m.clipY - Y); Y = m.clipY; }   // dropdown open — clear room above the page
   const halfW = Math.round(W / 2);
   tabs.forEach(t => {
@@ -260,7 +267,7 @@ window.addEventListener('resize', () => { try { layoutViews(); } catch (_) {} })
 let _lastOverlaySig = '';
 function maybeRelayout() {
   const m = contentMode();
-  const sig = m.hide ? 'hide' : (m.clipY ? ('clip:' + Math.round(m.clipY)) : 'none');
+  const sig = m.hide ? 'hide' : (m.clipRight ? ('r' + m.clipRight) : (m.clipY ? ('y' + Math.round(m.clipY)) : 'none'));
   if (sig === _lastOverlaySig) return;
   _lastOverlaySig = sig;
   try { layoutViews(); } catch (_) {}

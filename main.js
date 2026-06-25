@@ -519,18 +519,27 @@ ipcMain.on('view-create', (e, o) => {
     wc.on('did-navigate', () => send('did-navigate', { url: wc.getURL(), canBack: wc.navigationHistory.canGoBack(), canForward: wc.navigationHistory.canGoForward() }));
     wc.on('did-navigate-in-page', (e2, url, isMain) => { if (isMain) send('did-navigate-in-page', { url: wc.getURL(), canBack: wc.navigationHistory.canGoBack(), canForward: wc.navigationHistory.canGoForward() }); });
     wc.on('found-in-page', (e2, result) => send('found-in-page', { result: result }));
-    if (o.url) try { wc.loadURL(o.url); } catch (_) {}
+    if (o.url) try { wc.loadURL(o.url).catch(() => {}); } catch (_) {}
   } catch (_) {}
 });
 ipcMain.on('view-bounds', (e, d) => { const v = gResolve(e, d.vid); if (v) try { v.setBounds({ x: Math.round(d.x), y: Math.round(d.y), width: Math.round(d.width), height: Math.round(d.height) }); v.setVisible(true); } catch (_) {} });
 ipcMain.on('view-hide', (e, d) => { const v = gResolve(e, d.vid); if (v) try { v.setVisible(false); } catch (_) {} });
-ipcMain.on('view-destroy', (e, d) => { const w = BrowserWindow.fromWebContents(e.sender); if (!w) return; const k = gKey(w.webContents.id, d.vid); const v = guestViews.get(k); if (v) { try { v.webContents.setAudioMuted(true); } catch (_) {} try { w.contentView.removeChildView(v); } catch (_) {} try { if (!v.webContents.isDestroyed()) v.webContents.close(); } catch (_) {} guestViews.delete(k); } });
-ipcMain.on('view-nav', (e, d) => { const v = gResolve(e, d.vid); if (!v) return; const wc = v.webContents; try { if (d.action === 'load') wc.loadURL(d.url); else if (d.action === 'reload') wc.reload(); else if (d.action === 'back') { if (wc.navigationHistory.canGoBack()) wc.navigationHistory.goBack(); } else if (d.action === 'forward') { if (wc.navigationHistory.canGoForward()) wc.navigationHistory.goForward(); } } catch (_) {} });
+ipcMain.on('view-destroy', (e, d) => {
+  const w = BrowserWindow.fromWebContents(e.sender); if (!w) return;
+  const k = gKey(w.webContents.id, d.vid); const v = guestViews.get(k); if (!v) return;
+  guestViews.delete(k);
+  const wc = v.webContents;
+  try { wc.setAudioMuted(true); } catch (_) {}
+  try { wc.loadURL('about:blank').catch(() => {}); } catch (_) {}   // navigate away — reliably stops video/audio
+  try { w.contentView.removeChildView(v); } catch (_) {}
+  try { if (!wc.isDestroyed()) wc.close({ waitForBeforeUnload: false }); } catch (_) {}
+});
+ipcMain.on('view-nav', (e, d) => { const v = gResolve(e, d.vid); if (!v) return; const wc = v.webContents; try { if (d.action === 'load') wc.loadURL(d.url).catch(() => {}); else if (d.action === 'reload') wc.reload(); else if (d.action === 'back') { if (wc.navigationHistory.canGoBack()) wc.navigationHistory.goBack(); } else if (d.action === 'forward') { if (wc.navigationHistory.canGoForward()) wc.navigationHistory.goForward(); } } catch (_) {} });
 ipcMain.on('view-zoom', (e, d) => { const v = gResolve(e, d.vid); if (v) try { v.webContents.setZoomFactor(d.factor); } catch (_) {} });
 ipcMain.on('view-mute', (e, d) => { const v = gResolve(e, d.vid); if (v) try { v.webContents.setAudioMuted(!!d.muted); } catch (_) {} });
 ipcMain.on('view-find', (e, d) => { const v = gResolve(e, d.vid); if (v) try { if (d.action === 'find') v.webContents.findInPage(d.text, d.opts || {}); else v.webContents.stopFindInPage(d.arg || 'clearSelection'); } catch (_) {} });
 ipcMain.on('view-print', (e, d) => { const v = gResolve(e, d.vid); if (v) try { v.webContents.print(); } catch (_) {} });
-ipcMain.on('view-css', (e, d) => { const v = gResolve(e, d.vid); if (v) try { v.webContents.insertCSS(d.css); } catch (_) {} });
+ipcMain.on('view-css', (e, d) => { const v = gResolve(e, d.vid); if (v) try { v.webContents.insertCSS(d.css).catch(() => {}); } catch (_) {} });
 ipcMain.handle('view-exec', async (e, d) => { const v = gResolve(e, d.vid); if (!v) return null; try { return await v.webContents.executeJavaScript(d.js, !!d.userGesture); } catch (_) { return null; } });
 
 // ---- the one-press clear button ----
