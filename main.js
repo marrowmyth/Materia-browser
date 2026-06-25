@@ -250,10 +250,12 @@ function csend(w, ch, data) { const c = chromeWC(w); if (c) try { c.send(ch, dat
 function applyChromeBounds(w) {
   const v = chromeViews.get(w); if (!v) return;
   const b = w.getContentBounds();
-  const h = w._chromeFull ? b.height : Math.max(1, Math.round(w._stripH || 92));   // strip = just the toolbar+bookmarks; full when an overlay is up
-  try { v.setBounds({ x: 0, y: 0, width: b.width, height: h }); } catch (_) {}
+  try { v.setBounds({ x: 0, y: 0, width: b.width, height: b.height }); } catch (_) {}   // ALWAYS full-window so the chrome page lays out correctly; we control overlap via z-order, not size
 }
+// chrome stays full-window; float it ABOVE the page (overlay/menu open) or tuck it BEHIND it (browsing). When
+// behind, the page view covers only the content area, so the toolbar strip still shows and stays clickable.
 function chromeToTop(w) { const v = chromeViews.get(w); if (v) try { w.contentView.removeChildView(v); w.contentView.addChildView(v); } catch (_) {} }
+function chromeToBottom(w) { const v = chromeViews.get(w); if (v) try { w.contentView.removeChildView(v); w.contentView.addChildView(v, 0); } catch (_) {} }
 function createWindow(opts) {
   opts = opts || {};
   const w = new BrowserWindow({
@@ -269,7 +271,7 @@ function createWindow(opts) {
   try { chrome.setBackgroundColor('#00000000'); } catch (_) {}
   chromeViews.set(w, chrome);
   winOfChrome.set(chrome.webContents.id, w);
-  w._chromeFull = true; w._stripH = 92;   // start covering the whole window until the renderer reports the strip height
+  w._chromeFull = false;   // browsing state: chrome tucked behind the page; flips true when an overlay opens
   w.contentView.addChildView(chrome);
   applyChromeBounds(w);
   const q = {}; if (opts.url) q.u = opts.url; if (opts.wsId) q.ws = opts.wsId; if (opts.torn) q.nw = '1';
@@ -293,7 +295,7 @@ function createWindow(opts) {
   return w;
 }
 // the renderer reports its toolbar-strip height + whether an overlay is up; main sizes the chrome view to match
-ipcMain.on('chrome-bounds', (e, d) => { const w = winOfChrome.get(e.sender.id); if (!w) return; w._chromeFull = !!(d && d.full); if (d && d.stripH) w._stripH = Math.round(d.stripH); applyChromeBounds(w); });
+ipcMain.on('chrome-bounds', (e, d) => { const w = winOfChrome.get(e.sender.id); if (!w) return; const full = !!(d && d.full); if (full === w._chromeFull) return; w._chromeFull = full; if (full) chromeToTop(w); else chromeToBottom(w); });
 
 function isNewerVer(a, b) {
   const pa = String(a).split('.').map(n => parseInt(n, 10) || 0), pb = String(b).split('.').map(n => parseInt(n, 10) || 0);
@@ -512,7 +514,7 @@ ipcMain.on('view-create', (e, o) => {
     const view = new WebContentsView({ webPreferences: { partition: o.partition, preload: path.join(__dirname, 'mm-nt-preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: true } });
     try { view.setBackgroundColor('#061215'); } catch (_) {}
     w.contentView.addChildView(view);
-    chromeToTop(w);   // keep the chrome UI layer above the page views
+    if (w._chromeFull) chromeToTop(w); else chromeToBottom(w);   // restore correct z-order after inserting the page view
     view.setVisible(false);
     guestViews.set(gKey(e.sender.id, o.vid), view);
     const wc = view.webContents;
