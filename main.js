@@ -4,12 +4,28 @@ const path = require('path');
 const fs = require('fs');
 const { spawn, execFile } = require('child_process');
 
+// Log uncaught main-process errors to a file instead of popping Electron's default
+// "A JavaScript error occurred in the main process" dialog at the user. The app keeps running.
+function logMainError(tag, info) {
+  const line = '[' + new Date().toISOString() + '] ' + tag + ': ' + info + '\n';
+  try { console.error(line); } catch (_) {}
+  try {
+    const dir = path.join(process.env.APPDATA || process.env.HOME || '.', 'materia-browser');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.appendFileSync(path.join(dir, 'main-errors.log'), line);
+  } catch (_) {}
+}
 // executeJavaScript / insertCSS against a page view can reject if the view navigates or is torn off mid-call.
-// Those are benign races; swallow just those messages so they don't spam the console, surface anything else.
+// Those are benign races; swallow just those, log anything else (don't spam, don't pop a dialog).
 process.on('unhandledRejection', (reason) => {
   const m = (reason && reason.message) ? String(reason.message) : String(reason);
   if (/Script failed to execute|Object has been destroyed|been disposed|render frame was disposed|webContents was destroyed/i.test(m)) return;
-  console.warn('Unhandled rejection:', m);
+  logMainError('unhandledRejection', (reason && reason.stack) || m);
+});
+// Without a listener here, Electron pops its default error dialog on ANY uncaught main-process
+// throw. Catch it, log it, keep running — the user never sees a raw JS-error popup.
+process.on('uncaughtException', (err) => {
+  logMainError('uncaughtException', (err && err.stack) || (err && err.message) || String(err));
 });
 
 // ---- persisted prefs (read before app-ready so we can set Chromium flags) ----
