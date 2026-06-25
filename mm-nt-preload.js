@@ -9,4 +9,5 @@ try {
   };
   // start-page AI query: hand the text to the chrome, which opens the AI and prefills its box
   window.__mmAI = { send: (url, query) => { try { ipcRenderer.send('mm-ai-query', { url: url, query: query }); } catch (_) {} } };
+  window.__mmVer = (function () { try { return ipcRenderer.sendSync('mm-get-version'); } catch (_) { return ''; } })();   // running app version, for the start-page footer
 } catch (_) {}

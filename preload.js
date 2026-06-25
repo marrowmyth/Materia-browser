@@ -47,6 +47,8 @@ contextBridge.exposeInMainWorld('materia', {
   notify: (data) => ipcRenderer.send('notify', data),
   copyWorkspaceCookies: (from, to) => ipcRenderer.invoke('copy-workspace-cookies', from, to),
   onUpdateAvailable: (cb) => ipcRenderer.on('update-available', (e, d) => cb(d)),
+  downloadUpdate: (info) => ipcRenderer.invoke('download-update', info),
+  onUpdateProgress: (cb) => ipcRenderer.on('update-progress', (e, d) => cb(d)),
   // WebContentsView tab engine
   viewCreate: (o) => ipcRenderer.send('view-create', o),
   viewBounds: (d) => ipcRenderer.send('view-bounds', d),

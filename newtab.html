@@ -76,7 +76,7 @@
       <button type="submit" class="go">Go</button>
     </form>
   </div>
-  <p class="foot">&copy; 2026 MarrowMyth &middot; Powered by <b>Materia</b> &middot; All rights reserved</p>
+  <p class="foot">&copy; 2026 MarrowMyth &middot; Powered by <b>Materia</b> &middot; All rights reserved <span id="ver" style="opacity:.65"></span></p>
   <a class="donate" href="https://ko-fi.com/marrowmyth">&#x2665; Donate to help us keep moving</a>
 <script>
   // apply the active color scheme passed from the chrome
@@ -133,6 +133,7 @@
   document.getElementById('provider-menu').addEventListener('click', function (e) { e.stopPropagation(); });
   document.addEventListener('click', function () { document.getElementById('provider-menu').classList.add('hidden'); });
   renderProviderBtn(); buildMenu();
+  (function(){ var v = window.__mmVer, e = document.getElementById('ver'); if (e && v) e.textContent = '· v' + v; })();   // running version in the footer
 
   document.getElementById('s').addEventListener('submit', function (e) {
     e.preventDefault();

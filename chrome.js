@@ -496,8 +496,21 @@ $('nav-fwd').addEventListener('click', () => { const t = activeTab(); if (t && t
 $('nav-reload').addEventListener('click', () => { const t = activeTab(); if (t) t.view.reload(); });
 $('nav-home').addEventListener('click', () => { const t = activeTab(); if (t) t.view.loadURL(newtabUrl()); });
 $('nav-mm').addEventListener('click', () => { const t = activeTab(); if (t && isNewtab(t.url)) t.view.loadURL('https://marrowmyth.com'); else createTab('https://marrowmyth.com'); });
-{ const b = $('nav-update'); if (b) b.addEventListener('click', () => createTab(b._url || 'https://github.com/marrowmyth/Materia-browser/releases/latest')); }
-if (window.materia.onUpdateAvailable) window.materia.onUpdateAvailable((d) => { const b = $('nav-update'); if (!b) return; b._url = (d && d.url) || 'https://github.com/marrowmyth/Materia-browser/releases/latest'; b.title = 'Update available — v' + ((d && d.version) || '') + ' · click to get it'; b.classList.remove('hidden'); });
+{ const b = $('nav-update'); if (b) b.addEventListener('click', async () => {
+  const page = b._url || 'https://github.com/marrowmyth/Materia-browser/releases/latest';
+  if (!window.materia.downloadUpdate) { createTab(page); return; }
+  const ok = await confirmModal('Download and install Materia ' + (b._ver ? 'v' + b._ver + ' ' : '') + 'now? It downloads here, then the installer opens to finish.', 'Update');
+  if (!ok) return;
+  showMini('Downloading update… 0%');
+  const r = await window.materia.downloadUpdate({});
+  if (!r || !r.ok) { showMini('Download failed — opening release page'); createTab(page); }
+}); }
+if (window.materia.onUpdateProgress) window.materia.onUpdateProgress((d) => {
+  if (!d) return;
+  if (d.done) showMini('Update downloaded — opening installer…');
+  else showMini('Downloading update… ' + (d.pct || 0) + '%');
+});
+if (window.materia.onUpdateAvailable) window.materia.onUpdateAvailable((d) => { const b = $('nav-update'); if (!b) return; b._url = (d && d.url) || 'https://github.com/marrowmyth/Materia-browser/releases/latest'; b._ver = (d && d.version) || ''; b.title = 'Update available — v' + ((d && d.version) || '') + ' · click to install'; b.classList.remove('hidden'); });
 $('newtab').addEventListener('click', () => createTab());
 
 /* ---------- video downloader (yt-dlp) ---------- */
@@ -608,7 +621,7 @@ function doCreateWorkspace(name) {
   $('ws-menu').classList.add('hidden');
   switchWorkspace(id);
 }
-function confirmModal(message) {
+function confirmModal(message, okLabel) {
   return new Promise((resolve) => {
     closeCtxMenu();
     const ov = document.createElement('div'); ov.className = 'confirm-ov';
@@ -616,7 +629,7 @@ function confirmModal(message) {
     const msg = document.createElement('p'); msg.className = 'confirm-msg'; msg.textContent = message; card.appendChild(msg);
     const row = document.createElement('div'); row.className = 'confirm-row';
     const cancel = document.createElement('button'); cancel.className = 'action-btn'; cancel.textContent = 'Cancel';
-    const ok = document.createElement('button'); ok.className = 'action-btn action-danger'; ok.textContent = 'Remove';
+    const ok = document.createElement('button'); ok.className = 'action-btn' + (okLabel ? '' : ' action-danger'); ok.textContent = okLabel || 'Remove';
     row.append(cancel, ok); card.appendChild(row); ov.appendChild(card); document.body.appendChild(ov);
     const done = (v) => { ov.remove(); resolve(v); };
     cancel.addEventListener('click', () => done(false));

@@ -626,6 +626,7 @@ ipcMain.handle('get-settings', () => ({ blockTrackers, language: acceptLang }));
 ipcMain.handle('set-language', (e, v) => { acceptLang = String(v || 'en-US'); prefs.language = acceptLang; writePrefs(prefs); return acceptLang; });
 ipcMain.handle('adblock-status', () => ({ status: blockerStatus, blocked: blockedCount }));
 ipcMain.on('mm-get-provider', (e) => { e.returnValue = prefs.searchProvider || 'ddg'; });
+ipcMain.on('mm-get-version', (e) => { e.returnValue = app.getVersion(); });   // start page shows the running version
 ipcMain.handle('set-provider', (e, id) => { prefs.searchProvider = String(id || 'ddg'); writePrefs(prefs); return true; });
 ipcMain.handle('suggest', async (e, q) => {
   q = String(q || '').trim(); if (!q) return [];
@@ -672,6 +673,24 @@ async function registerAsBrowser() {
 }
 function isDefaultBrowser() { try { return process.platform === 'win32' && app.isDefaultProtocolClient('http'); } catch (_) { return false; } }
 ipcMain.handle('default-browser-status', () => ({ supported: process.platform === 'win32', packaged: app.isPackaged, isDefault: isDefaultBrowser() }));
+// download the latest installer ourselves (with progress) and launch it — no GitHub trip
+ipcMain.handle('download-update', async (e, info) => {
+  const url = (info && info.url) || 'https://github.com/marrowmyth/Materia-browser/releases/latest/download/Materia-Browser-Setup.exe';
+  const dest = path.join(app.getPath('temp'), 'Materia-Browser-Setup-update.exe');
+  const w = senderWin(e);
+  try {
+    const res = await fetch(url, { redirect: 'follow' });
+    if (!res.ok || !res.body) throw new Error('HTTP ' + res.status);
+    const total = Number(res.headers.get('content-length')) || 0;
+    const out = fs.createWriteStream(dest);
+    const reader = res.body.getReader(); let got = 0;
+    for (;;) { const { done, value } = await reader.read(); if (done) break; got += value.length; out.write(Buffer.from(value)); if (total && w) csend(w, 'update-progress', { pct: Math.round(got / total * 100) }); }
+    await new Promise((r, j) => out.end(err => err ? j(err) : r()));
+    if (w) csend(w, 'update-progress', { done: true });
+    setTimeout(() => { try { shell.openPath(dest); } catch (_) {} }, 300);   // SmartScreen prompt + the assisted installer take it from here
+    return { ok: true };
+  } catch (err) { return { ok: false, error: String((err && err.message) || err) }; }
+});
 ipcMain.handle('set-default-browser', async () => {
   if (process.platform !== 'win32') return { ok: false, reason: 'win-only' };
   if (!app.isPackaged) return { ok: false, reason: 'dev' };   // process.execPath is electron.exe in dev — only register the real installed build
