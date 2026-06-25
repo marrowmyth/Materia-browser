@@ -243,11 +243,19 @@ function anyOverlayOpen() {
 }
 function stripHeight() { try { return Math.max(1, Math.ceil(viewsEl.getBoundingClientRect().top)) || 92; } catch (_) { return 92; } }
 let _chromeFull = null;
-function pushChromeBounds() {
-  const full = anyOverlayOpen(); _chromeFull = full;
-  try { window.materia.chromeBounds({ full: full, stripH: stripHeight() }); } catch (_) {}
+let _lastY = 9999;   // last pointer Y inside the chrome; start in the content region so the chrome begins BEHIND the page
+// The chrome floats ABOVE the page while the pointer is over the toolbar strip OR an overlay is open (so the
+// address bar, menus and dropdowns are interactive and render over the page); it tucks BEHIND the page while
+// the pointer is over the content (so the page is clickable). Because every menu/dropdown opens from a toolbar
+// click, the chrome is already on top when it appears — no reorder mid-open, which would blur and dismiss it.
+function desiredTop() { return anyOverlayOpen() || _lastY < stripHeight(); }
+function applyChrome() {
+  const top = desiredTop();
+  if (top === _chromeFull) return;
+  _chromeFull = top;
+  try { window.materia.chromeBounds({ full: top }); } catch (_) {}
 }
-function syncChrome() { if (anyOverlayOpen() !== _chromeFull) pushChromeBounds(); }
+document.addEventListener('mousemove', (e) => { _lastY = e.clientY; applyChrome(); }, true);
 function layoutViews() {
   if (splitId && !tabs.some(t => t.id === splitId && t.wsId === activeWsId && t.id !== activeId)) splitId = null;
   const on = !!splitId;
@@ -260,13 +268,13 @@ function layoutViews() {
     else if (!on && left) window.materia.viewBounds({ vid: t.id, x: X, y: Y, width: W, height: H });
     else window.materia.viewHide({ vid: t.id });
   });
-  pushChromeBounds();
+  applyChrome();
 }
 window.addEventListener('resize', () => { try { layoutViews(); } catch (_) {} });
-{ let _vt = null; const obs = new MutationObserver(() => { clearTimeout(_vt); _vt = setTimeout(() => { try { syncChrome(); } catch (_) {} }, 16); }); obs.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style'] }); }
+{ let _vt = null; const obs = new MutationObserver(() => { clearTimeout(_vt); _vt = setTimeout(() => { try { applyChrome(); } catch (_) {} }, 16); }); obs.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style'] }); }
 // focusing a chrome field must float the chrome above the page AND grab OS keyboard focus, or typing goes to the page
-document.addEventListener('focusin', (e) => { if (isEditable(e.target)) { try { window.materia.focusChrome(); } catch (_) {} } try { syncChrome(); } catch (_) {} });
-document.addEventListener('focusout', () => { setTimeout(() => { try { syncChrome(); } catch (_) {} }, 0); });
+document.addEventListener('focusin', (e) => { if (isEditable(e.target)) { try { window.materia.focusChrome(); } catch (_) {} } try { applyChrome(); } catch (_) {} });
+document.addEventListener('focusout', () => { setTimeout(() => { try { applyChrome(); } catch (_) {} }, 0); });
 function openInSplit(id) {
   if (id === activeId || !tabs.some(t => t.id === id && t.wsId === activeWsId)) {
     const t = makeTab(activeWsId, null);   // spawn a fresh tab for the second pane

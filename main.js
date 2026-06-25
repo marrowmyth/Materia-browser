@@ -295,7 +295,7 @@ function createWindow(opts) {
   return w;
 }
 // the renderer reports its toolbar-strip height + whether an overlay is up; main sizes the chrome view to match
-ipcMain.on('chrome-bounds', (e, d) => { const w = winOfChrome.get(e.sender.id); if (!w) return; const full = !!(d && d.full); if (full === w._chromeFull) return; w._chromeFull = full; if (full) { chromeToTop(w); const c = chromeWC(w); if (c) try { c.focus(); } catch (_) {} } else chromeToBottom(w); });
+ipcMain.on('chrome-bounds', (e, d) => { const w = winOfChrome.get(e.sender.id); if (!w) return; const full = !!(d && d.full); if (full === w._chromeFull) return; w._chromeFull = full; if (full) chromeToTop(w); else chromeToBottom(w); });
 
 function isNewerVer(a, b) {
   const pa = String(a).split('.').map(n => parseInt(n, 10) || 0), pb = String(b).split('.').map(n => parseInt(n, 10) || 0);
