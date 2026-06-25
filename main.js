@@ -345,6 +345,7 @@ app.whenReady().then(() => {
   } catch (_) {}
   configurePartition('persist:ws-default');
   initBlocker();
+  registerAsBrowser();   // keep Materia listed as a browser candidate in Windows Default Apps (no-op in dev)
   initSafeBrowsing();
   createWindow();
   setTimeout(checkForUpdate, 8000); setInterval(checkForUpdate, 6 * 3600 * 1000);   // notify when a newer release is published
@@ -644,32 +645,39 @@ ipcMain.handle('get-dl-dirs', () => { const dl = app.getPath('downloads'); const
 ipcMain.handle('pick-dl-dir', async (e, cat) => { const r = await dialog.showOpenDialog(win, { title: 'Choose save folder', properties: ['openDirectory', 'createDirectory'] }); if (r.canceled || !r.filePaths.length) return null; prefs.dlDirs = prefs.dlDirs || {}; prefs.dlDirs[cat] = r.filePaths[0]; writePrefs(prefs); return r.filePaths[0]; });
 ipcMain.handle('reset-dl-dir', (e, cat) => { if (prefs.dlDirs) delete prefs.dlDirs[cat]; writePrefs(prefs); return app.getPath('downloads'); });
 // ---- default browser (Windows): register as a real browser candidate, then open Default Apps so the user picks it ----
-function regAdd(args) { return new Promise(res => { try { execFile('reg', ['add', ...args, '/f'], { windowsHide: true }, () => res()); } catch (_) { res(); } }); }
+function regEsc(s) { return s.replace(/\\/g, '\\\\').replace(/"/g, '\\"'); }   // escape a string for a .reg value
+function buildBrowserReg(exe) {
+  const e = regEsc(exe), p = 'MateriaBrowser.Html', K = 'HKEY_CURRENT_USER\\Software', SMI = K + '\\Clients\\StartMenuInternet\\MateriaBrowser';
+  return [
+    'Windows Registry Editor Version 5.00', '',
+    '[' + K + '\\Classes\\' + p + ']', '@="Materia Browser HTML Document"', '',
+    '[' + K + '\\Classes\\' + p + '\\DefaultIcon]', '@="' + e + ',0"', '',
+    '[' + K + '\\Classes\\' + p + '\\shell\\open\\command]', '@="\\"' + e + '\\" \\"%1\\""', '',
+    '[' + SMI + ']', '@="Materia Browser"', '',
+    '[' + SMI + '\\DefaultIcon]', '@="' + e + ',0"', '',
+    '[' + SMI + '\\shell\\open\\command]', '@="\\"' + e + '\\""', '',
+    '[' + SMI + '\\Capabilities]',
+    '"ApplicationName"="Materia Browser"',
+    '"ApplicationDescription"="A private, distraction-killing browser by MarrowMyth."',
+    '"ApplicationIcon"="' + e + ',0"', '',
+    '[' + SMI + '\\Capabilities\\URLAssociations]', '"http"="' + p + '"', '"https"="' + p + '"', '',
+    '[' + SMI + '\\Capabilities\\FileAssociations]', '".htm"="' + p + '"', '".html"="' + p + '"', '',
+    '[' + SMI + '\\Capabilities\\StartMenu]', '"StartMenuInternet"="MateriaBrowser"', '',
+    '[' + K + '\\RegisteredApplications]',
+    '"MateriaBrowser"="Software\\\\Clients\\\\StartMenuInternet\\\\MateriaBrowser\\\\Capabilities"', ''
+  ].join('\r\n');
+}
+// Register as a real browser candidate so Windows lists Materia in Default Apps (incl. HTTP/HTTPS).
+// Uses a .reg import — reliable escaping for install paths with spaces, unlike quoted `reg add` args.
 async function registerAsBrowser() {
-  if (process.platform !== 'win32') return false;
-  const exe = process.execPath, progId = 'MateriaBrowser.Html';
-  const appK = 'HKCU\\Software\\Clients\\StartMenuInternet\\MateriaBrowser';
-  const cap = appK + '\\Capabilities', cls = 'HKCU\\Software\\Classes\\' + progId;
-  const keys = [
-    [cls, '/ve', '/d', 'Materia Browser HTML Document'],
-    [cls + '\\DefaultIcon', '/ve', '/d', exe + ',0'],
-    [cls + '\\shell\\open\\command', '/ve', '/d', '"' + exe + '" "%1"'],
-    [appK, '/ve', '/d', 'Materia Browser'],
-    [appK + '\\DefaultIcon', '/ve', '/d', exe + ',0'],
-    [appK + '\\shell\\open\\command', '/ve', '/d', '"' + exe + '"'],
-    [cap, '/v', 'ApplicationName', '/d', 'Materia Browser'],
-    [cap, '/v', 'ApplicationDescription', '/d', 'A private, distraction-killing browser by MarrowMyth.'],
-    [cap, '/v', 'ApplicationIcon', '/d', exe + ',0'],
-    [cap + '\\URLAssociations', '/v', 'http', '/d', progId],
-    [cap + '\\URLAssociations', '/v', 'https', '/d', progId],
-    [cap + '\\FileAssociations', '/v', '.htm', '/d', progId],
-    [cap + '\\FileAssociations', '/v', '.html', '/d', progId],
-    [cap + '\\StartMenu', '/v', 'StartMenuInternet', '/d', 'MateriaBrowser'],
-    ['HKCU\\Software\\RegisteredApplications', '/v', 'MateriaBrowser', '/d', 'Software\\Clients\\StartMenuInternet\\MateriaBrowser\\Capabilities']
-  ];
-  for (const k of keys) await regAdd(k);
-  try { app.setAsDefaultProtocolClient('http'); app.setAsDefaultProtocolClient('https'); } catch (_) {}
-  return true;
+  if (process.platform !== 'win32' || !app.isPackaged) return false;   // execPath is electron.exe in dev — only register the real installed build
+  try {
+    const file = path.join(app.getPath('temp'), 'materia-browser-register.reg');
+    fs.writeFileSync(file, Buffer.concat([Buffer.from([0xFF, 0xFE]), Buffer.from(buildBrowserReg(process.execPath) + '\r\n', 'utf16le')]));
+    await new Promise(res => { try { execFile('reg', ['import', file], { windowsHide: true }, () => res()); } catch (_) { res(); } });
+    try { app.setAsDefaultProtocolClient('http'); app.setAsDefaultProtocolClient('https'); } catch (_) {}
+    return true;
+  } catch (_) { return false; }
 }
 function isDefaultBrowser() { try { return process.platform === 'win32' && app.isDefaultProtocolClient('http'); } catch (_) { return false; } }
 ipcMain.handle('default-browser-status', () => ({ supported: process.platform === 'win32', packaged: app.isPackaged, isDefault: isDefaultBrowser() }));
