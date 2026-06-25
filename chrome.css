@@ -161,11 +161,6 @@ body{
 /* ---- views ---- */
 #views{flex:1; position:relative; background:transparent}   /* the live page view sits behind this; keep it see-through */
 body.fullscreen #titlebar, body.fullscreen #toolbar, body.fullscreen #bookmarks, body.fullscreen #loadbar{ display:none !important }
-webview{position:absolute; inset:0; width:100%; height:100%; display:none}
-webview.active{display:flex}
-#views.split{display:flex; flex-direction:row}
-#views.split webview.pane{position:relative; inset:auto; width:auto; height:auto; flex:1 1 0; min-width:0; display:flex}
-#views.split webview.pane-left{border-right:2px solid var(--teal)}
 .tab.split-mate{background:var(--bg-3); box-shadow:inset 0 -2px 0 var(--teal)}
 
 /* ---- settings panel ---- */

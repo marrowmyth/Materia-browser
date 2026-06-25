@@ -42,7 +42,6 @@ if (!app.requestSingleInstanceLock()) {
 const configured = new Set(); // partitions whose privacy config is already attached
 let blocker = null;           // @ghostery/adblocker engine (ads + trackers + cookie banners + pop-ups)
 let blockerStatus = 'loading'; let blockedCount = 0;
-const blockedSessions = new Set();
 
 // ---- privacy: built-in tracker blocklist (toggleable from Settings) ----
 let blockTrackers = true;
@@ -251,14 +250,6 @@ async function initBlocker() {
   try { AdReq = require('@ghostery/adblocker').Request; } catch (_) {}   // used to match each request manually
   blockerStatus = 'active';
 }
-function enableBlockerOn(partition) {
-  if (!blocker || !blockAds || blockedSessions.has(partition)) return;
-  try { blocker.enableBlockingInSession(session.fromPartition(partition)); blockedSessions.add(partition); } catch (_) {}
-}
-function disableBlockerOn(partition) {
-  if (!blocker || !blockedSessions.has(partition)) return;
-  try { blocker.disableBlockingInSession(session.fromPartition(partition)); blockedSessions.delete(partition); } catch (_) {}
-}
 let win = null;   // tracks the most-recently-focused window (default target for renderer messages)
 const chromeViews = new Map();   // BrowserWindow -> chrome WebContentsView (the UI layer, sits ON TOP of the page views)
 const winOfChrome = new Map();   // chrome webContents id -> BrowserWindow  (so IPC from the chrome resolves its window)
@@ -361,20 +352,6 @@ ipcMain.handle('copy-text', (e, t) => { try { clipboard.writeText(String(t || ''
 // Reclaim keyboard focus to the chrome (address bar) when a <webview> is holding it.
 ipcMain.on('focus-chrome', (e) => { const w = senderWin(e); const c = w && chromeWC(w); if (c) try { c.focus(); } catch (_) {} });
 ipcMain.on('mm-ai-query', (e, data) => { const w = senderWin(e); if (w) csend(w, 'ai-query', data); });
-ipcMain.on('open-in-new-window', (e, data) => { try { createWindow({ url: data && data.url, wsId: data && data.wsId, torn: true }); } catch (_) {} });
-// a tab dragged out of its window: dock into the window under the cursor, else tear into a new one
-ipcMain.on('tab-dropped-out', (e, data) => {
-  try {
-    const src = senderWin(e);
-    const x = Math.round((data && data.x) || 0), y = Math.round((data && data.y) || 0);
-    const target = BrowserWindow.getAllWindows().find(w => {
-      if (w === src || w.isDestroyed() || !w.isVisible()) return false;
-      const b = w.getBounds(); return x >= b.x && x <= b.x + b.width && y >= b.y && y <= b.y + b.height;
-    });
-    if (target) csend(target, 'open-tab', { url: (data && data.url) || '', background: false });
-    else createWindow({ url: data && data.url, wsId: data && data.wsId, torn: true });
-  } catch (_) {}
-});
 // copy logins (cookies) from one workspace partition to another — independent copy afterward
 ipcMain.handle('copy-workspace-cookies', async (e, fromPartition, toPartition) => {
   try {
@@ -526,8 +503,6 @@ function wireGuest(wc, ownerWin) {
   });
   wc.on('zoom-changed', (e3, dir) => { const ow = owner(); if (ow) csend(ow, 'zoom-wheel', dir); });
 }
-// legacy path (old <webview> guests register their wc id); unused once tabs are WebContentsViews
-ipcMain.on('register-view', (e, wcId) => { const wc = webContents.fromId(wcId); if (wc) wireGuest(wc, BrowserWindow.fromWebContents(e.sender) || win); });
 
 // ---- WebContentsView tab engine (each tab is a main-owned view; survives moving between windows) ----
 const guestViews = new Map();   // `${chromeWcId}:${vid}` -> WebContentsView  (keyed by the chrome view that owns the tab)
@@ -613,7 +588,6 @@ ipcMain.on('view-find', (e, d) => { const v = gResolve(e, d.vid); if (v) try { i
 ipcMain.on('view-print', (e, d) => { const v = gResolve(e, d.vid); if (v) try { v.webContents.print(); } catch (_) {} });
 ipcMain.on('view-css', (e, d) => { const v = gResolve(e, d.vid); if (v) try { v.webContents.insertCSS(d.css).catch(() => {}); } catch (_) {} });
 ipcMain.handle('view-exec', async (e, d) => { const v = gResolve(e, d.vid); if (!v) return null; try { return await v.webContents.executeJavaScript(d.js, !!d.userGesture); } catch (_) { return null; } });
-ipcMain.handle('view-capture', async (e, d) => { const v = gResolve(e, d.vid); if (!v) return null; try { const img = await v.webContents.capturePage(); return img.toDataURL(); } catch (_) { return null; } });
 
 // ---- the one-press clear button ----
 //  keepLogins=true  -> wipe caches + service workers, KEEP cookies + localStorage (you stay logged in)
@@ -640,7 +614,7 @@ ipcMain.handle('remove-trusted', (e, host) => { trustedHosts.delete(String(host 
 ipcMain.handle('is-trusted', (e, url) => isTrustedHost(hostOf(String(url || ''))));
 ipcMain.handle('get-settings', () => ({ blockTrackers, language: acceptLang }));
 ipcMain.handle('set-language', (e, v) => { acceptLang = String(v || 'en-US'); prefs.language = acceptLang; writePrefs(prefs); return acceptLang; });
-ipcMain.handle('adblock-status', () => ({ status: blockerStatus, blocked: blockedCount, sessions: blockedSessions.size }));
+ipcMain.handle('adblock-status', () => ({ status: blockerStatus, blocked: blockedCount }));
 ipcMain.on('mm-get-provider', (e) => { e.returnValue = prefs.searchProvider || 'ddg'; });
 ipcMain.handle('set-provider', (e, id) => { prefs.searchProvider = String(id || 'ddg'); writePrefs(prefs); return true; });
 ipcMain.handle('suggest', async (e, q) => {

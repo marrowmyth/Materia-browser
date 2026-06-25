@@ -12,7 +12,6 @@ contextBridge.exposeInMainWorld('materia', {
   onFullscreen: (cb) => ipcRenderer.on('fullscreen', (e, on) => cb(on)),
   onWinState: (cb) => ipcRenderer.on('win-state', (e, max) => cb(max)),
 
-  registerView: (wcId) => ipcRenderer.send('register-view', wcId),
   onOpenTab: (cb) => ipcRenderer.on('open-tab', (e, data) => cb(data)),
   onPopupBlocked: (cb) => ipcRenderer.on('popup-blocked', (e, url) => cb(url)),
   onShortcut: (cb) => ipcRenderer.on('shortcut', (e, c) => cb(c)),
@@ -44,8 +43,6 @@ contextBridge.exposeInMainWorld('materia', {
   getCosmetics: (url) => ipcRenderer.invoke('get-cosmetics', url),
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
   notify: (data) => ipcRenderer.send('notify', data),
-  openInNewWindow: (url, wsId) => ipcRenderer.send('open-in-new-window', { url, wsId }),
-  tabDroppedOut: (data) => ipcRenderer.send('tab-dropped-out', data),
   copyWorkspaceCookies: (from, to) => ipcRenderer.invoke('copy-workspace-cookies', from, to),
   onUpdateAvailable: (cb) => ipcRenderer.on('update-available', (e, d) => cb(d)),
   // WebContentsView tab engine
@@ -60,7 +57,6 @@ contextBridge.exposeInMainWorld('materia', {
   viewPrint: (d) => ipcRenderer.send('view-print', d),
   viewCss: (d) => ipcRenderer.send('view-css', d),
   viewExec: (d) => ipcRenderer.invoke('view-exec', d),
-  viewCapture: (d) => ipcRenderer.invoke('view-capture', d),
   tabMoveOut: (d) => ipcRenderer.send('tab-move-out', d),
   viewAdopt: (d) => ipcRenderer.send('view-adopt', d),
   onAdoptTab: (cb) => ipcRenderer.on('adopt-tab', (e, d) => cb(d)),
