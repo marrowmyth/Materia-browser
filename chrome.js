@@ -121,7 +121,7 @@ function makeViewProxy(vid) {
     stopFindInPage: (a) => window.materia.viewFind({ vid: vid, action: 'stop', arg: a }),
     print: () => window.materia.viewPrint({ vid: vid }),
     insertCSS: (css) => { window.materia.viewCss({ vid: vid, css: css }); return Promise.resolve(); },
-    executeJavaScript: (js, ug) => window.materia.viewExec({ vid: vid, js: js, userGesture: ug }),
+    executeJavaScript: (js, ug) => window.materia.viewExec({ vid: vid, js: js, userGesture: ug }).catch(() => null),
     blur: () => {},
     remove: () => { window.materia.viewDestroy({ vid: vid }); delete viewState[vid]; }
   };
@@ -231,6 +231,7 @@ function renderTabs() {
 /* ---------- split view (two panes side by side in the same window) ---------- */
 function layoutViews() {
   if (splitId && !tabs.some(t => t.id === splitId && t.wsId === activeWsId && t.id !== activeId)) splitId = null;
+  if (_viewsSuppressed) { tabs.forEach(t => window.materia.viewHide({ vid: t.id })); return; }   // an overlay is up — keep the page hidden
   const on = !!splitId;
   const r = viewsEl.getBoundingClientRect();
   const X = r.left, Y = r.top, W = r.width, H = r.height, halfW = Math.round(W / 2);
@@ -243,6 +244,24 @@ function layoutViews() {
   });
 }
 window.addEventListener('resize', () => { try { layoutViews(); } catch (_) {} });
+// ---- P2: overlay chokepoint — hide the page view while an HTML overlay is up so it isn't covered ----
+let _viewsSuppressed = false;
+function anyOverlayOpen() {
+  const open = (id) => { const e = $(id); return !!(e && !e.classList.contains('hidden')); };
+  if (open('settings') || open('notes-panel') || open('list-panel')) return true;
+  const has = (id, cls) => { const e = $(id); return !!(e && e.classList.contains(cls)); };
+  if (has('omni-suggest', 'open') || has('folder-pop', 'open') || has('folder-pop-2', 'open')) return true;
+  if (document.querySelector('.confirm-ov')) return true;
+  return false;
+}
+function updateViewSuppression() {
+  const want = anyOverlayOpen();
+  if (want === _viewsSuppressed) return;
+  _viewsSuppressed = want;
+  if (want) tabs.forEach(t => window.materia.viewHide({ vid: t.id }));
+  else layoutViews();
+}
+{ let _vt = null; const obs = new MutationObserver(() => { clearTimeout(_vt); _vt = setTimeout(updateViewSuppression, 16); }); obs.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] }); }
 function openInSplit(id) {
   if (id === activeId || !tabs.some(t => t.id === id && t.wsId === activeWsId)) {
     const t = makeTab(activeWsId, null);   // spawn a fresh tab for the second pane
@@ -307,7 +326,7 @@ function wireView(tab) {
     if (isNewtab(tab.url)) { try { v.executeJavaScript('window.__setTheme&&window.__setTheme(' + JSON.stringify(currentTheme) + ')', true); } catch (_) {} }
     if (tab.focusOnReady) { tab.focusOnReady = false; try { omni.focus(); } catch (_) {} }   // new tab → cursor in the address bar
     if (forceRightClick) { try { v.executeJavaScript(UNBLOCK_JS, true); } catch (_) {} }
-    if (!isNewtab(tab.url)) { try { window.materia.getCosmetics(tab.url).then(css => { if (css) v.insertCSS(css).catch(() => {}); }); } catch (_) {} }
+    if (!isNewtab(tab.url)) { try { window.materia.getCosmetics(tab.url).then(css => { if (css) v.insertCSS(css).catch(() => {}); }).catch(() => {}); } catch (_) {} }
   });
 }
 
