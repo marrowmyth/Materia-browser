@@ -229,12 +229,24 @@ function renderTabs() {
 }
 
 /* ---------- split view (two panes side by side in the same window) ---------- */
+// full-screen overlay (panel/modal) -> hide the page; a dropdown -> just clip the page's top so it shows above
+function contentMode() {
+  const open = (id) => { const e = $(id); return !!(e && !e.classList.contains('hidden')); };
+  if (open('settings') || open('notes-panel') || open('list-panel') || document.querySelector('.confirm-ov')) return { hide: true };
+  const dropEl = (id) => { const e = $(id); return (e && e.classList.contains('open')) ? e : null; };
+  const drops = [dropEl('omni-suggest'), dropEl('folder-pop'), dropEl('folder-pop-2')].filter(Boolean);
+  if (drops.length) { let clipY = 0; drops.forEach(d => { const b = d.getBoundingClientRect().bottom; if (b > clipY) clipY = b; }); return { clipY: clipY }; }
+  return {};
+}
 function layoutViews() {
   if (splitId && !tabs.some(t => t.id === splitId && t.wsId === activeWsId && t.id !== activeId)) splitId = null;
-  if (_viewsSuppressed) { tabs.forEach(t => window.materia.viewHide({ vid: t.id })); return; }   // an overlay is up — keep the page hidden
+  const m = contentMode();
+  if (m.hide) { tabs.forEach(t => window.materia.viewHide({ vid: t.id })); return; }
   const on = !!splitId;
   const r = viewsEl.getBoundingClientRect();
-  const X = r.left, Y = r.top, W = r.width, H = r.height, halfW = Math.round(W / 2);
+  let X = r.left, Y = r.top, W = r.width, H = r.height;
+  if (m.clipY && m.clipY > Y) { H = H - (m.clipY - Y); Y = m.clipY; }   // dropdown open — clear room above the page
+  const halfW = Math.round(W / 2);
   tabs.forEach(t => {
     const left = t.id === activeId, right = on && t.id === splitId;
     if (on && left) window.materia.viewBounds({ vid: t.id, x: X, y: Y, width: halfW, height: H });
@@ -244,24 +256,16 @@ function layoutViews() {
   });
 }
 window.addEventListener('resize', () => { try { layoutViews(); } catch (_) {} });
-// ---- P2: overlay chokepoint — hide the page view while an HTML overlay is up so it isn't covered ----
-let _viewsSuppressed = false;
-function anyOverlayOpen() {
-  const open = (id) => { const e = $(id); return !!(e && !e.classList.contains('hidden')); };
-  if (open('settings') || open('notes-panel') || open('list-panel')) return true;
-  const has = (id, cls) => { const e = $(id); return !!(e && e.classList.contains(cls)); };
-  if (has('omni-suggest', 'open') || has('folder-pop', 'open') || has('folder-pop-2', 'open')) return true;
-  if (document.querySelector('.confirm-ov')) return true;
-  return false;
+// re-layout the page view only when the overlay state actually changes (cheap; avoids constant repositioning)
+let _lastOverlaySig = '';
+function maybeRelayout() {
+  const m = contentMode();
+  const sig = m.hide ? 'hide' : (m.clipY ? ('clip:' + Math.round(m.clipY)) : 'none');
+  if (sig === _lastOverlaySig) return;
+  _lastOverlaySig = sig;
+  try { layoutViews(); } catch (_) {}
 }
-function updateViewSuppression() {
-  const want = anyOverlayOpen();
-  if (want === _viewsSuppressed) return;
-  _viewsSuppressed = want;
-  if (want) tabs.forEach(t => window.materia.viewHide({ vid: t.id }));
-  else layoutViews();
-}
-{ let _vt = null; const obs = new MutationObserver(() => { clearTimeout(_vt); _vt = setTimeout(updateViewSuppression, 16); }); obs.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] }); }
+{ let _vt = null; const obs = new MutationObserver(() => { clearTimeout(_vt); _vt = setTimeout(maybeRelayout, 16); }); obs.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] }); }
 function openInSplit(id) {
   if (id === activeId || !tabs.some(t => t.id === id && t.wsId === activeWsId)) {
     const t = makeTab(activeWsId, null);   // spawn a fresh tab for the second pane
