@@ -27,6 +27,8 @@ const $ = (id) => document.getElementById(id);
 const viewsEl = $('views');
 const tabsEl = $('tabs');
 const omni = $('omnibox');
+// focusing the address bar must also pull OS keyboard focus to the chrome view (else it sits on the page view)
+function focusOmni() { try { omni.focus(); } catch (_) {} try { window.materia.focusChrome(); } catch (_) {} }
 
 /* ---------- workspaces (each has its own login partition) ---------- */
 let workspaces = [];        // [{id, name}]
@@ -168,7 +170,7 @@ function activateTab(id) {
   renderTabs();
   omni.value = prettyUrl(t.url);
   updateChrome(t);
-  if (!splitId && isNewtab(t.url)) { try { omni.focus(); } catch (_) {} }   // new tab → cursor in the address bar
+  if (!splitId && isNewtab(t.url)) focusOmni();   // new tab → cursor in the address bar
   saveSession();
 }
 
@@ -306,7 +308,7 @@ function layoutViews() {
 window.addEventListener('resize', () => { try { layoutViews(); } catch (_) {} });
 { let _vt = null; const obs = new MutationObserver(() => { clearTimeout(_vt); _vt = setTimeout(() => { try { applyChrome(); } catch (_) {} }, 16); }); obs.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style'] }); }
 // focusing a chrome field must float the chrome above the page AND grab OS keyboard focus, or typing goes to the page
-document.addEventListener('focusin', (e) => { if (isEditable(e.target)) { try { window.materia.focusChrome(); } catch (_) {} } try { applyChrome(); } catch (_) {} });
+document.addEventListener('focusin', (e) => { try { applyChrome(); } catch (_) {} if (isEditable(e.target)) { try { window.materia.focusChrome(); } catch (_) {} } });
 document.addEventListener('focusout', () => { setTimeout(() => { try { applyChrome(); } catch (_) {} }, 0); });
 function openInSplit(id) {
   if (id === activeId || !tabs.some(t => t.id === id && t.wsId === activeWsId)) {
@@ -370,7 +372,7 @@ function wireView(tab) {
   v.addEventListener('dom-ready', () => {
     try { v.setZoomFactor(effectiveZoom()); } catch (_) {}
     if (isNewtab(tab.url)) { try { v.executeJavaScript('window.__setTheme&&window.__setTheme(' + JSON.stringify(currentTheme) + ')', true); } catch (_) {} }
-    if (tab.focusOnReady) { tab.focusOnReady = false; try { omni.focus(); } catch (_) {} }   // new tab → cursor in the address bar
+    if (tab.focusOnReady) { tab.focusOnReady = false; focusOmni(); }   // new tab → cursor in the address bar
     if (forceRightClick) { try { v.executeJavaScript(UNBLOCK_JS, true); } catch (_) {} }
     if (!isNewtab(tab.url)) { try { window.materia.getCosmetics(tab.url).then(css => { if (css) v.insertCSS(css).catch(() => {}); }).catch(() => {}); } catch (_) {} }
   });
@@ -808,6 +810,7 @@ function makeFolderChip(f) {
   const ic = document.createElement('span'); ic.className = 'bm-folder-ic'; ic.innerHTML = FOLDER_SVG; el.appendChild(ic);
   const tt = document.createElement('span'); tt.className = 'bm-title'; tt.textContent = f.name; el.appendChild(tt);
   el.addEventListener('click', (e) => { e.stopPropagation(); openFolder(f, el); });
+  el.addEventListener('mouseenter', () => { const p = $('folder-pop'); if (p && p.classList.contains('open') && p._f !== f) openFolder(f, el); });   // once a folder is open, hovering another switches to it
   el.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); showFolderMenu(f, el, e.clientX, e.clientY); });
   el.draggable = true;
   el.addEventListener('dragstart', (e) => { dragBm = f; el.classList.add('dragging'); try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', f.name); } catch (_) {} });
@@ -1091,7 +1094,7 @@ function findNext(forward) { const t = activeTab(); const text = ($('find-input'
 function handleShortcut(cmd) {
   if (cmd === 'newtab') createTab();
   else if (cmd === 'closetab') { if (activeId) closeTab(activeId); }
-  else if (cmd === 'focusomni') omni.focus();
+  else if (cmd === 'focusomni') focusOmni();
   else if (cmd === 'reload') { const t = activeTab(); if (t) t.view.reload(); }
   else if (cmd === 'find') showFind();
   else if (cmd === 'reopentab') reopenClosed();
