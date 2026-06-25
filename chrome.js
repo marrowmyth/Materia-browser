@@ -1279,17 +1279,23 @@ function updateNotesGlow() {
 function checkReminders() {
   let changed = false; const now = Date.now();
   notesData.notes.forEach(n => {
-    if (!n.due || now < n.due) return;
-    if (n.repeat === 'daily') {
-      // fire once, then roll forward to the next future occurrence (no nagging if days were missed)
-      try { window.materia.notify({ title: n.title || 'Reminder', body: n.body || 'Daily reminder.' }); } catch (_) {}
-      let d = n.due; while (d <= now) d += 86400000; n.due = d; n.notified = false; changed = true;
-    } else if (!n.notified) {
-      n.notified = true; changed = true;
-      try { window.materia.notify({ title: n.title || 'Reminder', body: n.body || 'A Materia note reminder is due.' }); } catch (_) {}
-    }
+    if (!n.due || now < n.due || n.notified) return;
+    // fire the OS notification ONCE per occurrence (catches up if it came due while the browser was closed);
+    // the persistent GLOW then carries the reminder until you open Notes — so nothing is missed by being closed.
+    n.notified = true; changed = true;
+    try { window.materia.notify({ title: n.title || 'Reminder', body: n.body || (n.repeat === 'daily' ? 'Daily reminder.' : 'A Materia note reminder is due.') }); } catch (_) {}
   });
   if (changed) { saveNotes(); if (!$('notes-panel').classList.contains('hidden')) renderNotesGrid(); }
+  updateNotesGlow();
+}
+// opening Notes = "I've seen them": daily reminders roll to their next occurrence so the glow clears (one-time
+// notes keep glowing until you delete them — they're real undone tasks). Skips days missed while closed.
+function acknowledgeReminders() {
+  let changed = false; const now = Date.now();
+  notesData.notes.forEach(n => {
+    if (n.repeat === 'daily' && n.due && now >= n.due) { let d = n.due; while (d <= now) d += 86400000; n.due = d; n.notified = false; changed = true; }
+  });
+  if (changed) saveNotes();
   updateNotesGlow();
 }
 function startNotesTimer() { if (notesTimer) clearInterval(notesTimer); checkReminders(); notesTimer = setInterval(checkReminders, 20000); }
@@ -1388,7 +1394,7 @@ function saveNoteFromEditor() {
   saveNotes(); closeNoteEditor(); renderNotes(); checkReminders();
 }
 function deleteNote(id) { notesData.notes = notesData.notes.filter(n => n.id !== id); saveNotes(); closeNoteEditor(); renderNotes(); updateNotesGlow(); }
-function openNotesPanel() { settings.classList.add('hidden'); if ($('list-panel')) $('list-panel').classList.add('hidden'); closeNoteEditor(); $('notes-panel').classList.remove('hidden'); renderNotes(); }
+function openNotesPanel() { settings.classList.add('hidden'); if ($('list-panel')) $('list-panel').classList.add('hidden'); closeNoteEditor(); $('notes-panel').classList.remove('hidden'); renderNotes(); acknowledgeReminders(); }
 $('nav-notes').addEventListener('click', openNotesPanel);
 $('notes-close').addEventListener('click', () => $('notes-panel').classList.add('hidden'));
 $('notes-panel').addEventListener('click', (e) => { if (e.target === $('notes-panel')) $('notes-panel').classList.add('hidden'); });
