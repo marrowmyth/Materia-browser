@@ -47,6 +47,13 @@ const blockedSessions = new Set();
 // ---- privacy: built-in tracker blocklist (toggleable from Settings) ----
 let blockTrackers = true;
 let blockAds = true;
+let AdReq = null;   // @ghostery/adblocker Request ctor — for matching each request manually (so the allowlist can override it)
+let trustedHosts = new Set(Array.isArray(prefs.trustedHosts) ? prefs.trustedHosts : []);   // user allowlist: these sites load FULLY unblocked
+function isTrustedHost(h) { if (!h) return false; for (const t of trustedHosts) { if (h === t || h.endsWith('.' + t)) return true; } return false; }
+function rType(t) { return ({ mainFrame: 'main_frame', subFrame: 'sub_frame', xhr: 'xmlhttprequest', cspReport: 'csp_report', webSocket: 'websocket' })[t] || t; }
+function reqTopUrl(details) { if (details.resourceType === 'mainFrame') return details.url; try { if (details.webContentsId) { const wc = webContents.fromId(details.webContentsId); if (wc && !wc.isDestroyed()) return wc.getURL(); } } catch (_) {} return details.url; }
+function normTrustHost(s) { s = String(s || '').trim().toLowerCase(); if (!s) return ''; return hostOf(/:\/\//.test(s) ? s : 'http://' + s); }
+function persistTrusted() { try { prefs.trustedHosts = Array.from(trustedHosts); writePrefs(prefs); } catch (_) {} }
 const TRACKERS = [
   'doubleclick.net', 'googlesyndication.com', 'google-analytics.com', 'googletagmanager.com',
   'googletagservices.com', 'adservice.google.', 'pagead2.googlesyndication', '/pagead/',
@@ -157,14 +164,18 @@ function configurePartition(partition) {
       try { const u = new URL(details.url).searchParams.get('u'); if (u) { safeAllow.add(hostOf(u)); return cb({ redirectURL: u }); } } catch (_) {}
       return cb({ cancel: true });
     }
-    if (details.resourceType === 'ping') return cb({ cancel: true });
-    // Safe Browsing: block navigations to known phishing/malware hosts.
+    // Safe Browsing: block navigations to known phishing/malware hosts (always on — even for trusted sites).
     if (SAFE_HOSTS.size && details.resourceType === 'mainFrame' && /^https?:/.test(details.url)) {
       const h = hostOf(details.url);
       if (h && SAFE_HOSTS.has(h) && !safeAllow.has(h)) return cb({ redirectURL: safeBlockPage(details.url) });
     }
-    if (blockTrackers && /^https?:/.test(details.url) && isTracker(details.url)) {
-      return cb({ cancel: true });
+    // Trusted site (user allowlist) → load everything, no ad/tracker blocking or param stripping.
+    const top = reqTopUrl(details);
+    if (isTrustedHost(hostOf(top))) return cb({});
+    if (details.resourceType === 'ping') return cb({ cancel: true });
+    if (blockTrackers && /^https?:/.test(details.url) && isTracker(details.url)) return cb({ cancel: true });
+    if (blockAds && blocker && AdReq && /^https?:/.test(details.url)) {
+      try { const r = blocker.match(AdReq.fromRawDetails({ type: rType(details.resourceType), url: details.url, sourceUrl: top || details.url })); if (r && r.match) { blockedCount++; return cb({ cancel: true }); } } catch (_) {}
     }
     if (details.resourceType === 'mainFrame' && details.url.indexOf('?') >= 0) {
       const clean = stripTrackingParams(details.url);
@@ -207,8 +218,7 @@ function configurePartition(partition) {
     item.once('done', (ev, st) => send(st));
   });
 
-  enableBlockerOn(partition);
-  return ses;
+  return ses;   // ad/tracker blocking is applied manually in onBeforeRequest (above) so the trusted-site allowlist can override it
 }
 
 async function initBlocker() {
@@ -238,9 +248,8 @@ async function initBlocker() {
     try { blocker = await ElectronBlocker.fromPrefetchedAdsAndTracking(fetch, {}, caching); } catch (e2) { console.error('adblocker prebuilt failed:', e2 && e2.message); }
   }
   if (!blocker) { blockerStatus = 'failed'; return; }
-  try { blocker.on('request-blocked', () => { blockedCount++; }); } catch (_) {}
+  try { AdReq = require('@ghostery/adblocker').Request; } catch (_) {}   // used to match each request manually
   blockerStatus = 'active';
-  if (blockAds) configured.forEach(enableBlockerOn);
 }
 function enableBlockerOn(partition) {
   if (!blocker || !blockAds || blockedSessions.has(partition)) return;
@@ -448,6 +457,11 @@ function popupContextMenu(wc, params) {
   items.push({ label: 'Forward', enabled: wc.navigationHistory.canGoForward(), click: () => wc.navigationHistory.goForward() });
   items.push({ label: 'Reload', click: () => wc.reload() });
   items.push({ label: 'Remove page overlays', click: () => { try { wc.executeJavaScript(OVERLAY_REMOVER_JS).catch(function(){}); } catch (_) {} } });
+  const trustHost = hostOf(wc.getURL());
+  if (trustHost) {
+    const isT = isTrustedHost(trustHost);
+    items.push({ label: isT ? ('Stop trusting ' + trustHost) : ('Trust ' + trustHost + ' (don’t block here)'), click: () => { if (isT) trustedHosts.delete(trustHost); else trustedHosts.add(trustHost); persistTrusted(); try { wc.reload(); } catch (_) {} } });
+  }
   const darkOrigin = originOf(wc.getURL());
   items.push({ label: (darkOrigin && darkSites.has(darkOrigin)) ? 'Disable dark mode (this site)' : 'Force dark mode (this site)', enabled: !!darkOrigin, click: () => {
     if (!darkOrigin) return;
@@ -618,12 +632,12 @@ ipcMain.handle('clear-data', async (e, partition, keepLogins) => {
   return true;
 });
 
-ipcMain.handle('set-block-trackers', (e, val) => {
-  blockTrackers = !!val; blockAds = !!val;
-  if (blockAds) configured.forEach(enableBlockerOn);
-  else Array.from(blockedSessions).forEach(disableBlockerOn);
-  return blockTrackers;
-});
+ipcMain.handle('set-block-trackers', (e, val) => { blockTrackers = !!val; blockAds = !!val; return blockTrackers; });   // blocking reads these flags live in onBeforeRequest
+// ---- trusted sites (allowlist): these load fully unblocked ----
+ipcMain.handle('get-trusted', () => Array.from(trustedHosts));
+ipcMain.handle('add-trusted', (e, host) => { const h = normTrustHost(host); if (h) { trustedHosts.add(h); persistTrusted(); } return Array.from(trustedHosts); });
+ipcMain.handle('remove-trusted', (e, host) => { trustedHosts.delete(String(host || '').toLowerCase()); persistTrusted(); return Array.from(trustedHosts); });
+ipcMain.handle('is-trusted', (e, url) => isTrustedHost(hostOf(String(url || ''))));
 ipcMain.handle('get-settings', () => ({ blockTrackers, language: acceptLang }));
 ipcMain.handle('set-language', (e, v) => { acceptLang = String(v || 'en-US'); prefs.language = acceptLang; writePrefs(prefs); return acceptLang; });
 ipcMain.handle('adblock-status', () => ({ status: blockerStatus, blocked: blockedCount, sessions: blockedSessions.size }));

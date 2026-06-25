@@ -664,7 +664,23 @@ $('ws-new-input').addEventListener('keydown', (e) => {
 
 /* ---------- settings ---------- */
 const settings = $('settings');
-$('nav-settings').addEventListener('click', () => { settings.classList.remove('hidden'); collapseAllBlocks(); renderProviderSetting(); renderAdblockStatus(); });
+$('nav-settings').addEventListener('click', () => { settings.classList.remove('hidden'); collapseAllBlocks(); renderProviderSetting(); renderAdblockStatus(); renderTrusted(); });
+function renderTrusted() {
+  const list = $('trust-list'); if (!list || !window.materia.getTrusted) return;
+  window.materia.getTrusted().then(hosts => {
+    list.innerHTML = '';
+    if (!hosts.length) { const e = document.createElement('p'); e.className = 'set-note'; e.style.margin = '0'; e.textContent = 'No trusted sites yet.'; list.appendChild(e); return; }
+    hosts.sort().forEach(h => {
+      const row = document.createElement('div'); row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 10px;background:var(--bg);border:1px solid var(--line);border-radius:7px';
+      const name = document.createElement('span'); name.textContent = h; name.style.cssText = 'font-size:12.5px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+      const rm = document.createElement('button'); rm.className = 'iconbtn'; rm.textContent = '✕'; rm.title = 'Remove from trusted'; rm.style.flex = 'none';
+      rm.addEventListener('click', () => { window.materia.removeTrusted(h).then(renderTrusted); });
+      row.appendChild(name); row.appendChild(rm); list.appendChild(row);
+    });
+  });
+}
+function addTrustedFromInput() { const i = $('trust-input'); if (!i) return; const v = i.value.trim(); if (!v) return; window.materia.addTrusted(v).then(() => { i.value = ''; renderTrusted(); }); }
+{ const b = $('trust-add'); if (b) b.addEventListener('click', addTrustedFromInput); const i = $('trust-input'); if (i) i.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addTrustedFromInput(); } }); }
 function renderAdblockStatus() {
   const el = $('adblock-status'); if (!el || !window.materia.adblockStatus) return;
   window.materia.adblockStatus().then(s => {

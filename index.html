@@ -147,6 +147,17 @@
           <label class="switch"><input type="checkbox" id="toggle-trackers"><span class="slider"></span></label>
         </div>
         <p id="adblock-status" class="set-note" style="margin-top:.5rem"></p>
+        <div class="set-row" style="margin-top:1.2rem; align-items:flex-start">
+          <div style="flex:1; min-width:0">
+            <p class="set-label">Trusted sites — always load unblocked</p>
+            <p class="set-note">Sites you trust skip ad/tracker blocking entirely, so players and logins load normally (e.g. <b>youtube.com</b>, <b>facebook.com</b>). Safe Browsing still applies. Tip: right-click a page → “Trust this site”.</p>
+            <div style="display:flex; gap:6px; margin-top:.55rem">
+              <input id="trust-input" class="mat-input" type="text" placeholder="example.com" spellcheck="false" autocomplete="off" style="flex:1">
+              <button id="trust-add" class="iconbtn" style="white-space:nowrap; padding:0 14px">Add</button>
+            </div>
+            <div id="trust-list" style="margin-top:.6rem; display:flex; flex-direction:column; gap:4px"></div>
+          </div>
+        </div>
         <div class="set-row" style="margin-top:1.2rem">
           <div>
             <p class="set-label">Force-enable right-click &amp; copy</p>
