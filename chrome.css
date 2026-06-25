@@ -183,6 +183,14 @@ body.fullscreen #titlebar, body.fullscreen #toolbar, body.fullscreen #bookmarks,
 .set-row{display:flex; align-items:flex-start; justify-content:space-between; gap:14px}
 .set-label{color:var(--ink); font-size:13px; margin-bottom:3px}
 .set-note{color:var(--ink-faint); font-size:11.5px; line-height:1.6}
+/* Compact text action button for settings rows (NOT the 28px square .iconbtn, which clips text). */
+.set-btn{
+  flex:none; white-space:nowrap; cursor:pointer; font-family:var(--mono);
+  font-size:12px; letter-spacing:.03em; padding:8px 16px; border-radius:8px;
+  border:1px solid rgba(var(--teal-rgb),.45); background:rgba(var(--teal-rgb),.08);
+  color:var(--teal); transition:.15s;
+}
+.set-btn:hover{ background:rgba(var(--teal-rgb),.18); border-color:var(--teal) }
 .action-btn{
   display:block; width:100%; text-align:left; padding:.8rem 1rem; border-radius:10px; cursor:pointer;
   font-family:var(--ui); font-size:12.5px; letter-spacing:.02em; transition:.15s; border:1px solid;
