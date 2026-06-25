@@ -1,5 +1,5 @@
 'use strict';
-const { app, BrowserWindow, session, ipcMain, shell, webContents, nativeTheme, Menu, clipboard, dialog, Notification } = require('electron');
+const { app, BrowserWindow, WebContentsView, session, ipcMain, shell, webContents, nativeTheme, Menu, clipboard, dialog, Notification } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
@@ -456,33 +456,28 @@ function popupContextMenu(wc, params) {
 }
 
 // ---- route popups / window.open into new tabs + right-click menu ----
-ipcMain.on('register-view', (e, wcId) => {
-  const wc = webContents.fromId(wcId);
-  if (!wc || wc.__mmReg) return;   // register-view fires every dom-ready; only wire each guest once
+// per-guest wiring (privacy, pop-up handling, right-click menu, shortcuts, dark mode).
+// ownerWin = the window that hosts this page, so messages reach the right renderer.
+function wireGuest(wc, ownerWin) {
+  if (!wc || wc.__mmReg) return;
   wc.__mmReg = true;
-  // Block WebRTC from leaking your real/local IP (the hole a VPN doesn't plug).
   try { wc.setWebRTCIPHandlingPolicy('default_public_interface_only'); } catch (_) {}
   wc.setWindowOpenHandler(({ url, disposition }) => {
-    // No site ever gets a floating window — that kills pop-unders outright. Then:
-    if (/^https?:/i.test(url) && (isTracker(url) || adWouldBlock(url, wc.getURL()))) return { action: 'deny' };   // ad/tracker/pop-under domain: silently killed
-    if (isAuthPopup(url)) return { action: 'allow' };   // genuine OAuth needs a real window (window.opener) — let it through even with pop-ups blocked
+    if (/^https?:/i.test(url) && (isTracker(url) || adWouldBlock(url, wc.getURL()))) return { action: 'deny' };
+    if (isAuthPopup(url)) return { action: 'allow' };
     if (disposition === 'foreground-tab' || disposition === 'background-tab') {
-      // a link the user actually clicked (target=_blank / ctrl-click): just open a tab
-      if (win) win.webContents.send('open-tab', { url, background: disposition === 'background-tab' });
+      if (ownerWin) ownerWin.webContents.send('open-tab', { url, background: disposition === 'background-tab' });
       return { action: 'deny' };
     }
-    // a scripted window.open pop-up — might be intentional (OAuth, share). Ask, don't auto-open.
-    if (win) win.webContents.send('popup-blocked', url);
+    if (ownerWin) ownerWin.webContents.send('popup-blocked', url);
     return { action: 'deny' };
   });
-  // the actual right-click menu (built from each click's hit-test params)
   wc.on('context-menu', (e2, params) => popupContextMenu(wc, params));
-  wc.once('destroyed', () => darkAttached.delete(wc.id));   // tab closed — debugger auto-detaches
-  wc.on('did-navigate', () => applyDark(wc));               // re-apply / clear remembered dark mode as the origin changes
-  wc.on('devtools-opened', () => { if (darkAttached.has(wc.id)) { try { wc.debugger.detach(); } catch (_) {} darkAttached.delete(wc.id); } });  // free the debugger so Inspect works
-  wc.on('devtools-closed', () => applyDark(wc));            // restore dark mode after DevTools closes
-  applyDark(wc);                                             // apply now if this tab's current site is remembered
-  // forward our shortcuts even while a page has focus (window keydown won't see those)
+  wc.once('destroyed', () => darkAttached.delete(wc.id));
+  wc.on('did-navigate', () => applyDark(wc));
+  wc.on('devtools-opened', () => { if (darkAttached.has(wc.id)) { try { wc.debugger.detach(); } catch (_) {} darkAttached.delete(wc.id); } });
+  wc.on('devtools-closed', () => applyDark(wc));
+  applyDark(wc);
   wc.on('before-input-event', (event, input) => {
     if (input.type !== 'keyDown') return;
     const ctrl = input.control || input.meta; const k = input.key || '';
@@ -492,11 +487,50 @@ ipcMain.on('register-view', (e, wcId) => {
     else if (ctrl && k === 'Tab') cmd = 'nexttab';
     else if (ctrl && /^[1-9]$/.test(k)) cmd = 'tab' + k;
     else if (ctrl) { const m = { t: 'newtab', w: 'closetab', l: 'focusomni', r: 'reload', f: 'find', d: 'bookmark', p: 'print', '=': 'zoomin', '+': 'zoomin', '-': 'zoomout', '0': 'zoomreset' }; cmd = m[k.toLowerCase()]; }
-    if (cmd) { event.preventDefault(); if (win) win.webContents.send('shortcut', cmd); }
+    if (cmd) { event.preventDefault(); if (ownerWin) ownerWin.webContents.send('shortcut', cmd); }
   });
-  // Ctrl+wheel over a page fires here (not the renderer) — route it through our zoom + toast
-  wc.on('zoom-changed', (e3, dir) => { if (win) win.webContents.send('zoom-wheel', dir); });
+  wc.on('zoom-changed', (e3, dir) => { if (ownerWin) ownerWin.webContents.send('zoom-wheel', dir); });
+}
+// legacy path (old <webview> guests register their wc id); unused once tabs are WebContentsViews
+ipcMain.on('register-view', (e, wcId) => { const wc = webContents.fromId(wcId); if (wc) wireGuest(wc, BrowserWindow.fromWebContents(e.sender) || win); });
+
+// ---- WebContentsView tab engine (each tab is a main-owned view; survives moving between windows) ----
+const guestViews = new Map();   // `${windowWcId}:${vid}` -> WebContentsView
+function gKey(winWcId, vid) { return winWcId + ':' + vid; }
+function gResolve(e, vid) { const w = BrowserWindow.fromWebContents(e.sender); return w ? (guestViews.get(gKey(w.webContents.id, vid)) || null) : null; }
+ipcMain.on('view-create', (e, o) => {
+  try {
+    const w = BrowserWindow.fromWebContents(e.sender); if (!w) return;
+    try { configurePartition(o.partition); } catch (_) {}
+    const view = new WebContentsView({ webPreferences: { partition: o.partition, preload: o.preload || undefined, contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: true } });
+    try { view.setBackgroundColor('#061215'); } catch (_) {}
+    w.contentView.addChildView(view);
+    view.setVisible(false);
+    guestViews.set(gKey(w.webContents.id, o.vid), view);
+    const wc = view.webContents;
+    wireGuest(wc, w);
+    const send = (event, payload) => { try { if (!w.isDestroyed()) w.webContents.send('view-event', { vid: o.vid, event: event, payload: payload }); } catch (_) {} };
+    wc.on('page-title-updated', (e2, title) => send('page-title-updated', { title: title }));
+    wc.on('page-favicon-updated', (e2, favicons) => send('page-favicon-updated', { favicons: favicons }));
+    wc.on('did-start-loading', () => send('did-start-loading', {}));
+    wc.on('did-stop-loading', () => send('did-stop-loading', {}));
+    wc.on('dom-ready', () => send('dom-ready', {}));
+    wc.on('did-navigate', () => send('did-navigate', { url: wc.getURL(), canBack: wc.canGoBack(), canForward: wc.canGoForward() }));
+    wc.on('did-navigate-in-page', (e2, url, isMain) => { if (isMain) send('did-navigate-in-page', { url: wc.getURL(), canBack: wc.canGoBack(), canForward: wc.canGoForward() }); });
+    wc.on('found-in-page', (e2, result) => send('found-in-page', { result: result }));
+    if (o.url) try { wc.loadURL(o.url); } catch (_) {}
+  } catch (_) {}
 });
+ipcMain.on('view-bounds', (e, d) => { const v = gResolve(e, d.vid); if (v) try { v.setBounds({ x: Math.round(d.x), y: Math.round(d.y), width: Math.round(d.width), height: Math.round(d.height) }); v.setVisible(true); } catch (_) {} });
+ipcMain.on('view-hide', (e, d) => { const v = gResolve(e, d.vid); if (v) try { v.setVisible(false); } catch (_) {} });
+ipcMain.on('view-destroy', (e, d) => { const w = BrowserWindow.fromWebContents(e.sender); if (!w) return; const k = gKey(w.webContents.id, d.vid); const v = guestViews.get(k); if (v) { try { w.contentView.removeChildView(v); } catch (_) {} try { v.webContents.destroy(); } catch (_) {} guestViews.delete(k); } });
+ipcMain.on('view-nav', (e, d) => { const v = gResolve(e, d.vid); if (!v) return; const wc = v.webContents; try { if (d.action === 'load') wc.loadURL(d.url); else if (d.action === 'reload') wc.reload(); else if (d.action === 'back') { if (wc.canGoBack()) wc.goBack(); } else if (d.action === 'forward') { if (wc.canGoForward()) wc.goForward(); } } catch (_) {} });
+ipcMain.on('view-zoom', (e, d) => { const v = gResolve(e, d.vid); if (v) try { v.webContents.setZoomFactor(d.factor); } catch (_) {} });
+ipcMain.on('view-mute', (e, d) => { const v = gResolve(e, d.vid); if (v) try { v.webContents.setAudioMuted(!!d.muted); } catch (_) {} });
+ipcMain.on('view-find', (e, d) => { const v = gResolve(e, d.vid); if (v) try { if (d.action === 'find') v.webContents.findInPage(d.text, d.opts || {}); else v.webContents.stopFindInPage(d.arg || 'clearSelection'); } catch (_) {} });
+ipcMain.on('view-print', (e, d) => { const v = gResolve(e, d.vid); if (v) try { v.webContents.print(); } catch (_) {} });
+ipcMain.on('view-css', (e, d) => { const v = gResolve(e, d.vid); if (v) try { v.webContents.insertCSS(d.css); } catch (_) {} });
+ipcMain.handle('view-exec', async (e, d) => { const v = gResolve(e, d.vid); if (!v) return null; try { return await v.webContents.executeJavaScript(d.js, !!d.userGesture); } catch (_) { return null; } });
 
 // ---- the one-press clear button ----
 //  keepLogins=true  -> wipe caches + service workers, KEEP cookies + localStorage (you stay logged in)

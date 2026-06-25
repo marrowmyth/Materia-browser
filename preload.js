@@ -42,5 +42,18 @@ contextBridge.exposeInMainWorld('materia', {
   openInNewWindow: (url, wsId) => ipcRenderer.send('open-in-new-window', { url, wsId }),
   tabDroppedOut: (data) => ipcRenderer.send('tab-dropped-out', data),
   copyWorkspaceCookies: (from, to) => ipcRenderer.invoke('copy-workspace-cookies', from, to),
-  onUpdateAvailable: (cb) => ipcRenderer.on('update-available', (e, d) => cb(d))
+  onUpdateAvailable: (cb) => ipcRenderer.on('update-available', (e, d) => cb(d)),
+  // WebContentsView tab engine
+  viewCreate: (o) => ipcRenderer.send('view-create', o),
+  viewBounds: (d) => ipcRenderer.send('view-bounds', d),
+  viewHide: (d) => ipcRenderer.send('view-hide', d),
+  viewDestroy: (d) => ipcRenderer.send('view-destroy', d),
+  viewNav: (d) => ipcRenderer.send('view-nav', d),
+  viewZoom: (d) => ipcRenderer.send('view-zoom', d),
+  viewMute: (d) => ipcRenderer.send('view-mute', d),
+  viewFind: (d) => ipcRenderer.send('view-find', d),
+  viewPrint: (d) => ipcRenderer.send('view-print', d),
+  viewCss: (d) => ipcRenderer.send('view-css', d),
+  viewExec: (d) => ipcRenderer.invoke('view-exec', d),
+  onViewEvent: (cb) => ipcRenderer.on('view-event', (e, d) => cb(d))
 });
