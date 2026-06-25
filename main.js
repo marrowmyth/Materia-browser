@@ -275,6 +275,7 @@ function createWindow(opts) {
     if (it.length) { try { Menu.buildFromTemplate(it).popup(); } catch (_) {} }
   });
   w.on('focus', () => { win = w; });   // messages follow the window you're actually using
+  w.on('close', () => { try { const pre = w.webContents.id + ':'; for (const [key, vv] of guestViews) { if (key.indexOf(pre) === 0) { try { vv.webContents.setAudioMuted(true); } catch (_) {} try { vv.webContents.loadURL('about:blank').catch(() => {}); } catch (_) {} try { if (!vv.webContents.isDestroyed()) vv.webContents.close({ waitForBeforeUnload: false }); } catch (_) {} guestViews.delete(key); } } } catch (_) {} });   // tear down this window's page views so audio stops
   w.on('maximize', () => w.webContents.send('win-state', true));
   w.on('unmaximize', () => w.webContents.send('win-state', false));
   w.on('enter-full-screen', () => w.webContents.send('fullscreen', true));
@@ -541,6 +542,7 @@ ipcMain.on('view-find', (e, d) => { const v = gResolve(e, d.vid); if (v) try { i
 ipcMain.on('view-print', (e, d) => { const v = gResolve(e, d.vid); if (v) try { v.webContents.print(); } catch (_) {} });
 ipcMain.on('view-css', (e, d) => { const v = gResolve(e, d.vid); if (v) try { v.webContents.insertCSS(d.css).catch(() => {}); } catch (_) {} });
 ipcMain.handle('view-exec', async (e, d) => { const v = gResolve(e, d.vid); if (!v) return null; try { return await v.webContents.executeJavaScript(d.js, !!d.userGesture); } catch (_) { return null; } });
+ipcMain.handle('view-capture', async (e, d) => { const v = gResolve(e, d.vid); if (!v) return null; try { const img = await v.webContents.capturePage(); return img.toDataURL(); } catch (_) { return null; } });
 
 // ---- the one-press clear button ----
 //  keepLogins=true  -> wipe caches + service workers, KEEP cookies + localStorage (you stay logged in)

@@ -55,5 +55,6 @@ contextBridge.exposeInMainWorld('materia', {
   viewPrint: (d) => ipcRenderer.send('view-print', d),
   viewCss: (d) => ipcRenderer.send('view-css', d),
   viewExec: (d) => ipcRenderer.invoke('view-exec', d),
+  viewCapture: (d) => ipcRenderer.invoke('view-capture', d),
   onViewEvent: (cb) => ipcRenderer.on('view-event', (e, d) => cb(d))
 });

@@ -229,31 +229,23 @@ function renderTabs() {
 }
 
 /* ---------- split view (two panes side by side in the same window) ---------- */
-// confirm modal -> hide; right-side panel -> clip to its left (page stays beside it); dropdown -> clip the top
-function contentMode() {
-  if (document.querySelector('.confirm-ov')) return { hide: true };
-  for (const id of ['settings', 'notes-panel', 'list-panel']) {
-    const e = $(id);
-    if (e && !e.classList.contains('hidden')) {
-      const card = e.querySelector('.panel-card');
-      return card ? { clipRight: Math.round(card.getBoundingClientRect().left) } : { hide: true };
-    }
-  }
-  const dropEl = (id) => { const e = $(id); return (e && e.classList.contains('open')) ? e : null; };
-  const drops = [dropEl('omni-suggest'), dropEl('folder-pop'), dropEl('folder-pop-2')].filter(Boolean);
-  if (drops.length) { let clipY = 0; drops.forEach(d => { const b = d.getBoundingClientRect().bottom; if (b > clipY) clipY = b; }); return { clipY: clipY }; }
-  return {};
+// when any HTML overlay (panel/dropdown/modal) is up, freeze the page as a backdrop snapshot and hide the
+// live view — so panels float over a dimmable page and dropdowns sit over it without pushing it around.
+function anyOverlayOpen() {
+  const open = (id) => { const e = $(id); return !!(e && !e.classList.contains('hidden')); };
+  if (open('settings') || open('notes-panel') || open('list-panel')) return true;
+  const has = (id, cls) => { const e = $(id); return !!(e && e.classList.contains(cls)); };
+  if (has('omni-suggest', 'open') || has('folder-pop', 'open') || has('folder-pop-2', 'open')) return true;
+  if (document.querySelector('.confirm-ov')) return true;
+  return false;
 }
+let _overlayActive = false;
 function layoutViews() {
   if (splitId && !tabs.some(t => t.id === splitId && t.wsId === activeWsId && t.id !== activeId)) splitId = null;
-  const m = contentMode();
-  if (m.hide) { tabs.forEach(t => window.materia.viewHide({ vid: t.id })); return; }
+  if (_overlayActive) { tabs.forEach(t => window.materia.viewHide({ vid: t.id })); return; }   // overlay up — page shown via snapshot
   const on = !!splitId;
   const r = viewsEl.getBoundingClientRect();
-  let X = r.left, Y = r.top, W = r.width, H = r.height;
-  if (m.clipRight && m.clipRight > X) W = m.clipRight - X;   // side panel — keep the page to its left
-  if (m.clipY && m.clipY > Y) { H = H - (m.clipY - Y); Y = m.clipY; }   // dropdown open — clear room above the page
-  const halfW = Math.round(W / 2);
+  const X = r.left, Y = r.top, W = r.width, H = r.height, halfW = Math.round(W / 2);
   tabs.forEach(t => {
     const left = t.id === activeId, right = on && t.id === splitId;
     if (on && left) window.materia.viewBounds({ vid: t.id, x: X, y: Y, width: halfW, height: H });
@@ -263,16 +255,22 @@ function layoutViews() {
   });
 }
 window.addEventListener('resize', () => { try { layoutViews(); } catch (_) {} });
-// re-layout the page view only when the overlay state actually changes (cheap; avoids constant repositioning)
-let _lastOverlaySig = '';
-function maybeRelayout() {
-  const m = contentMode();
-  const sig = m.hide ? 'hide' : (m.clipRight ? ('r' + m.clipRight) : (m.clipY ? ('y' + Math.round(m.clipY)) : 'none'));
-  if (sig === _lastOverlaySig) return;
-  _lastOverlaySig = sig;
-  try { layoutViews(); } catch (_) {}
+async function updateOverlayState() {
+  const open = anyOverlayOpen();
+  if (open === _overlayActive) return;
+  _overlayActive = open;
+  if (open) {
+    const t = activeTab(); let snap = null;
+    if (t) { try { snap = await window.materia.viewCapture({ vid: t.id }); } catch (_) {} }
+    if (!_overlayActive) return;   // overlay was dismissed during the async capture
+    if (snap) { viewsEl.style.backgroundImage = 'url("' + snap + '")'; viewsEl.style.backgroundSize = '100% 100%'; viewsEl.style.backgroundRepeat = 'no-repeat'; }
+    tabs.forEach(tt => window.materia.viewHide({ vid: tt.id }));
+  } else {
+    viewsEl.style.backgroundImage = '';
+    layoutViews();
+  }
 }
-{ let _vt = null; const obs = new MutationObserver(() => { clearTimeout(_vt); _vt = setTimeout(maybeRelayout, 16); }); obs.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] }); }
+{ let _vt = null; const obs = new MutationObserver(() => { clearTimeout(_vt); _vt = setTimeout(() => { try { updateOverlayState(); } catch (_) {} }, 16); }); obs.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] }); }
 function openInSplit(id) {
   if (id === activeId || !tabs.some(t => t.id === id && t.wsId === activeWsId)) {
     const t = makeTab(activeWsId, null);   // spawn a fresh tab for the second pane
