@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('materia', {
   winClose: () => ipcRenderer.send('win-close'),
   toggleFullscreen: () => ipcRenderer.invoke('toggle-fullscreen'),
   focusChrome: () => ipcRenderer.send('focus-chrome'),
+  chromeBounds: (d) => ipcRenderer.send('chrome-bounds', d),
   onAIQuery: (cb) => ipcRenderer.on('ai-query', (e, d) => cb(d)),
   onFullscreen: (cb) => ipcRenderer.on('fullscreen', (e, on) => cb(on)),
   onWinState: (cb) => ipcRenderer.on('win-state', (e, max) => cb(max)),

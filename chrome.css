@@ -14,7 +14,7 @@
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
 body{
-  background:var(--bg); color:var(--ink-dim); font-family:var(--ui);
+  background:transparent; color:var(--ink-dim); font-family:var(--ui);   /* chrome is a transparent view OVER the live page; bars/panels carry their own opaque bg */
   font-size:13px; display:flex; flex-direction:column; overflow:hidden; user-select:none;
 }
 
@@ -159,7 +159,7 @@ body{
 #loadbar.on{opacity:1}
 
 /* ---- views ---- */
-#views{flex:1; position:relative; background:var(--bg)}
+#views{flex:1; position:relative; background:transparent}   /* the live page view sits behind this; keep it see-through */
 body.fullscreen #titlebar, body.fullscreen #toolbar, body.fullscreen #bookmarks, body.fullscreen #loadbar{ display:none !important }
 webview{position:absolute; inset:0; width:100%; height:100%; display:none}
 webview.active{display:flex}

@@ -193,7 +193,7 @@ function configurePartition(partition) {
     try { item.setSavePath(savePath); } catch (_) {}
     const id = 'd' + Date.now() + Math.floor(Math.random() * 1000);
     const url = item.getURL();
-    const send = (state) => { if (win) win.webContents.send('download', { id, name: item.getFilename(), url, path: savePath, state, received: item.getReceivedBytes(), total: item.getTotalBytes() }); };
+    const send = (state) => { if (win) csend(win, 'download', { id, name: item.getFilename(), url, path: savePath, state, received: item.getReceivedBytes(), total: item.getTotalBytes() }); };
     send('progress');
     item.on('updated', (ev, st) => send(st === 'interrupted' ? 'interrupted' : 'progress'));
     item.once('done', (ev, st) => send(st));
@@ -243,51 +243,57 @@ function disableBlockerOn(partition) {
   try { blocker.disableBlockingInSession(session.fromPartition(partition)); blockedSessions.delete(partition); } catch (_) {}
 }
 let win = null;   // tracks the most-recently-focused window (default target for renderer messages)
+const chromeViews = new Map();   // BrowserWindow -> chrome WebContentsView (the UI layer, sits ON TOP of the page views)
+const winOfChrome = new Map();   // chrome webContents id -> BrowserWindow  (so IPC from the chrome resolves its window)
+function chromeWC(w) { const v = chromeViews.get(w); return (v && !v.webContents.isDestroyed()) ? v.webContents : null; }
+function csend(w, ch, data) { const c = chromeWC(w); if (c) try { c.send(ch, data); } catch (_) {} }
+function applyChromeBounds(w) {
+  const v = chromeViews.get(w); if (!v) return;
+  const b = w.getContentBounds();
+  const h = w._chromeFull ? b.height : Math.max(1, Math.round(w._stripH || 92));   // strip = just the toolbar+bookmarks; full when an overlay is up
+  try { v.setBounds({ x: 0, y: 0, width: b.width, height: h }); } catch (_) {}
+}
+function chromeToTop(w) { const v = chromeViews.get(w); if (v) try { w.contentView.removeChildView(v); w.contentView.addChildView(v); } catch (_) {} }
 function createWindow(opts) {
   opts = opts || {};
   const w = new BrowserWindow({
     width: 1280, height: 820, minWidth: 760, minHeight: 480,
-    frame: false,
-    backgroundColor: '#061215',
-    title: 'Materia Browser',
+    frame: false, backgroundColor: '#061215', title: 'Materia Browser',
     icon: path.join(__dirname, 'assets', 'icon-white.png'),
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      webviewTag: true,
-      backgroundThrottling: true,
-      sandbox: true
-    }
+    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true }
   });
   win = w;
-  // a torn-off tab/window opens fresh in its workspace; that window is ephemeral (skips session save/restore)
-  if (opts.url || opts.torn) {
-    const q = {}; if (opts.url) q.u = opts.url; if (opts.wsId) q.ws = opts.wsId; if (opts.torn) q.nw = '1';
-    w.loadFile('index.html', { query: q });
-  } else w.loadFile('index.html');
+  try { w.webContents.loadURL('data:text/html,<body style="margin:0;background:%23061215"></body>'); } catch (_) {}   // inert base; all UI lives in the chrome view
+  // the chrome UI (toolbar/bookmarks/panels/menus) is a transparent view ABOVE the page views
+  const chrome = new WebContentsView({ webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true } });
+  try { chrome.setBackgroundColor('#00000000'); } catch (_) {}
+  chromeViews.set(w, chrome);
+  winOfChrome.set(chrome.webContents.id, w);
+  w._chromeFull = true; w._stripH = 92;   // start covering the whole window until the renderer reports the strip height
+  w.contentView.addChildView(chrome);
+  applyChromeBounds(w);
+  const q = {}; if (opts.url) q.u = opts.url; if (opts.wsId) q.ws = opts.wsId; if (opts.torn) q.nw = '1';
+  chrome.webContents.loadFile('index.html', Object.keys(q).length ? { query: q } : undefined);
   // right-click menu for the chrome's own inputs (address bar, settings fields)
-  w.webContents.on('context-menu', (e, params) => {
+  chrome.webContents.on('context-menu', (e, params) => {
     const it = [];
-    if (params.isEditable) {
-      it.push({ role: 'undo', enabled: params.editFlags.canUndo }, { role: 'redo', enabled: params.editFlags.canRedo }, { type: 'separator' }, { role: 'cut', enabled: params.editFlags.canCut }, { role: 'copy', enabled: params.editFlags.canCopy }, { role: 'paste', enabled: params.editFlags.canPaste }, { role: 'selectAll' });
-    } else if (params.selectionText) { it.push({ role: 'copy' }); }
+    if (params.isEditable) { it.push({ role: 'undo', enabled: params.editFlags.canUndo }, { role: 'redo', enabled: params.editFlags.canRedo }, { type: 'separator' }, { role: 'cut', enabled: params.editFlags.canCut }, { role: 'copy', enabled: params.editFlags.canCopy }, { role: 'paste', enabled: params.editFlags.canPaste }, { role: 'selectAll' }); }
+    else if (params.selectionText) { it.push({ role: 'copy' }); }
     if (it.length) { try { Menu.buildFromTemplate(it).popup(); } catch (_) {} }
   });
-  w.on('focus', () => { win = w; });   // messages follow the window you're actually using
-  w.on('close', () => { try { const pre = w.webContents.id + ':'; for (const [key, vv] of guestViews) { if (key.indexOf(pre) === 0) { try { vv.webContents.setAudioMuted(true); } catch (_) {} try { vv.webContents.loadURL('about:blank').catch(() => {}); } catch (_) {} try { if (!vv.webContents.isDestroyed()) vv.webContents.close({ waitForBeforeUnload: false }); } catch (_) {} guestViews.delete(key); } } } catch (_) {} });   // tear down this window's page views so audio stops
-  w.on('maximize', () => w.webContents.send('win-state', true));
-  w.on('unmaximize', () => w.webContents.send('win-state', false));
-  w.on('enter-full-screen', () => w.webContents.send('fullscreen', true));
-  w.on('leave-full-screen', () => w.webContents.send('fullscreen', false));
-  w.on('closed', () => { if (win === w) win = null; });
-  // mouse side buttons (X1/X2) → page back / forward
-  w.on('app-command', (e, cmd) => {
-    if (cmd === 'browser-backward') { e.preventDefault(); w.webContents.send('shortcut', 'back'); }
-    else if (cmd === 'browser-forward') { e.preventDefault(); w.webContents.send('shortcut', 'forward'); }
-  });
+  w.on('focus', () => { win = w; });
+  w.on('resize', () => applyChromeBounds(w));
+  w.on('close', () => { try { const cv = chromeViews.get(w); const pre = (cv ? cv.webContents.id : -1) + ':'; for (const [key, vv] of guestViews) { if (key.indexOf(pre) === 0) { try { vv.webContents.setAudioMuted(true); } catch (_) {} try { vv.webContents.loadURL('about:blank').catch(() => {}); } catch (_) {} try { if (!vv.webContents.isDestroyed()) vv.webContents.close({ waitForBeforeUnload: false }); } catch (_) {} guestViews.delete(key); } } } catch (_) {} });
+  w.on('maximize', () => csend(w, 'win-state', true));
+  w.on('unmaximize', () => csend(w, 'win-state', false));
+  w.on('enter-full-screen', () => csend(w, 'fullscreen', true));
+  w.on('leave-full-screen', () => csend(w, 'fullscreen', false));
+  w.on('closed', () => { const cv = chromeViews.get(w); if (cv) winOfChrome.delete(cv.webContents.id); chromeViews.delete(w); if (win === w) win = null; });
+  w.on('app-command', (e, cmd) => { if (cmd === 'browser-backward') { e.preventDefault(); csend(w, 'shortcut', 'back'); } else if (cmd === 'browser-forward') { e.preventDefault(); csend(w, 'shortcut', 'forward'); } });
   return w;
 }
+// the renderer reports its toolbar-strip height + whether an overlay is up; main sizes the chrome view to match
+ipcMain.on('chrome-bounds', (e, d) => { const w = winOfChrome.get(e.sender.id); if (!w) return; w._chromeFull = !!(d && d.full); if (d && d.stripH) w._stripH = Math.round(d.stripH); applyChromeBounds(w); });
 
 function isNewerVer(a, b) {
   const pa = String(a).split('.').map(n => parseInt(n, 10) || 0), pb = String(b).split('.').map(n => parseInt(n, 10) || 0);
@@ -302,7 +308,7 @@ async function checkForUpdate() {
     const tag = (data.tag_name || '').replace(/^v/i, '');
     if (tag && isNewerVer(tag, app.getVersion())) {
       const url = data.html_url || 'https://github.com/marrowmyth/Materia-browser/releases/latest';
-      BrowserWindow.getAllWindows().forEach(w => { try { w.webContents.send('update-available', { version: tag, url: url }); } catch (_) {} });
+      BrowserWindow.getAllWindows().forEach(w => { try { csend(w, 'update-available', { version: tag, url: url }); } catch (_) {} });
     }
   } catch (_) {}
 }
@@ -324,26 +330,26 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 
 // ---- window controls (frameless) ----
-function senderWin(e) { try { return BrowserWindow.fromWebContents(e.sender) || win; } catch (_) { return win; } }
+function senderWin(e) { try { return winOfChrome.get(e.sender.id) || BrowserWindow.fromWebContents(e.sender) || win; } catch (_) { return win; } }
 ipcMain.on('win-min', (e) => { const w = senderWin(e); if (w) w.minimize(); });
 ipcMain.on('win-max', (e) => { const w = senderWin(e); if (w) (w.isMaximized() ? w.unmaximize() : w.maximize()); });
 ipcMain.on('win-close', (e) => { const w = senderWin(e); if (w) w.close(); });
 ipcMain.handle('toggle-fullscreen', (e) => { const w = senderWin(e); if (w) w.setFullScreen(!w.isFullScreen()); return true; });
 ipcMain.handle('copy-text', (e, t) => { try { clipboard.writeText(String(t || '')); } catch (_) {} return true; });
 // Reclaim keyboard focus to the chrome (address bar) when a <webview> is holding it.
-ipcMain.on('focus-chrome', (e) => { const w = senderWin(e); if (w) try { w.webContents.focus(); } catch (_) {} });
-ipcMain.on('mm-ai-query', (e, data) => { const w = senderWin(e); if (w) w.webContents.send('ai-query', data); });
+ipcMain.on('focus-chrome', (e) => { const w = senderWin(e); const c = w && chromeWC(w); if (c) try { c.focus(); } catch (_) {} });
+ipcMain.on('mm-ai-query', (e, data) => { const w = senderWin(e); if (w) csend(w, 'ai-query', data); });
 ipcMain.on('open-in-new-window', (e, data) => { try { createWindow({ url: data && data.url, wsId: data && data.wsId, torn: true }); } catch (_) {} });
 // a tab dragged out of its window: dock into the window under the cursor, else tear into a new one
 ipcMain.on('tab-dropped-out', (e, data) => {
   try {
-    const src = BrowserWindow.fromWebContents(e.sender);
+    const src = senderWin(e);
     const x = Math.round((data && data.x) || 0), y = Math.round((data && data.y) || 0);
     const target = BrowserWindow.getAllWindows().find(w => {
       if (w === src || w.isDestroyed() || !w.isVisible()) return false;
       const b = w.getBounds(); return x >= b.x && x <= b.x + b.width && y >= b.y && y <= b.y + b.height;
     });
-    if (target) target.webContents.send('open-tab', { url: (data && data.url) || '', background: false });
+    if (target) csend(target, 'open-tab', { url: (data && data.url) || '', background: false });
     else createWindow({ url: data && data.url, wsId: data && data.wsId, torn: true });
   } catch (_) {}
 });
@@ -400,7 +406,7 @@ function setAutoDark(wc, on) {
 // reconcile one tab to its current origin's remembered preference
 function applyDark(wc) { try { setAutoDark(wc, darkSites.has(originOf(wc.getURL()))); } catch (_) {} }
 function popupContextMenu(wc, params) {
-  const send = (url, background) => { if (win) win.webContents.send('open-tab', { url, background: !!background }); };
+  const send = (url, background) => { if (win) csend(win, 'open-tab', { url, background: !!background }); };
   const items = [];
   if (params.linkURL) {
     items.push({ label: 'Open link in new tab', click: () => send(params.linkURL, true) });   // explicit → background, don't steal focus
@@ -438,11 +444,11 @@ function popupContextMenu(wc, params) {
   } });
   items.push({ type: 'separator' });
   items.push({ label: 'Download video (yt-dlp)', submenu: [
-    { label: 'Best quality', click: () => { if (win) win.webContents.send('ytdlp', { url: wc.getURL(), quality: 'best' }); } },
-    { label: '1080p', click: () => { if (win) win.webContents.send('ytdlp', { url: wc.getURL(), quality: '1080' }); } },
-    { label: '720p', click: () => { if (win) win.webContents.send('ytdlp', { url: wc.getURL(), quality: '720' }); } },
-    { label: '480p', click: () => { if (win) win.webContents.send('ytdlp', { url: wc.getURL(), quality: '480' }); } },
-    { label: 'Audio only (m4a)', click: () => { if (win) win.webContents.send('ytdlp', { url: wc.getURL(), quality: 'audio' }); } }
+    { label: 'Best quality', click: () => { if (win) csend(win, 'ytdlp', { url: wc.getURL(), quality: 'best' }); } },
+    { label: '1080p', click: () => { if (win) csend(win, 'ytdlp', { url: wc.getURL(), quality: '1080' }); } },
+    { label: '720p', click: () => { if (win) csend(win, 'ytdlp', { url: wc.getURL(), quality: '720' }); } },
+    { label: '480p', click: () => { if (win) csend(win, 'ytdlp', { url: wc.getURL(), quality: '480' }); } },
+    { label: 'Audio only (m4a)', click: () => { if (win) csend(win, 'ytdlp', { url: wc.getURL(), quality: 'audio' }); } }
   ] });
   items.push({ label: 'Copy page address', click: () => { try { clipboard.writeText(wc.getURL()); } catch (_) {} } });
   items.push({ label: 'Select all', click: () => { try { wc.selectAll(); } catch (_) {} } });
@@ -467,10 +473,10 @@ function wireGuest(wc, ownerWin) {
     if (/^https?:/i.test(url) && (isTracker(url) || adWouldBlock(url, wc.getURL()))) return { action: 'deny' };
     if (isAuthPopup(url)) return { action: 'allow' };
     if (disposition === 'foreground-tab' || disposition === 'background-tab') {
-      if (ownerWin) ownerWin.webContents.send('open-tab', { url, background: disposition === 'background-tab' });
+      if (ownerWin) csend(ownerWin, 'open-tab', { url, background: disposition === 'background-tab' });
       return { action: 'deny' };
     }
-    if (ownerWin) ownerWin.webContents.send('popup-blocked', url);
+    if (ownerWin) csend(ownerWin, 'popup-blocked', url);
     return { action: 'deny' };
   });
   wc.on('context-menu', (e2, params) => popupContextMenu(wc, params));
@@ -488,30 +494,31 @@ function wireGuest(wc, ownerWin) {
     else if (ctrl && k === 'Tab') cmd = 'nexttab';
     else if (ctrl && /^[1-9]$/.test(k)) cmd = 'tab' + k;
     else if (ctrl) { const m = { t: 'newtab', w: 'closetab', l: 'focusomni', r: 'reload', f: 'find', d: 'bookmark', p: 'print', '=': 'zoomin', '+': 'zoomin', '-': 'zoomout', '0': 'zoomreset' }; cmd = m[k.toLowerCase()]; }
-    if (cmd) { event.preventDefault(); if (ownerWin) ownerWin.webContents.send('shortcut', cmd); }
+    if (cmd) { event.preventDefault(); if (ownerWin) csend(ownerWin, 'shortcut', cmd); }
   });
-  wc.on('zoom-changed', (e3, dir) => { if (ownerWin) ownerWin.webContents.send('zoom-wheel', dir); });
+  wc.on('zoom-changed', (e3, dir) => { if (ownerWin) csend(ownerWin, 'zoom-wheel', dir); });
 }
 // legacy path (old <webview> guests register their wc id); unused once tabs are WebContentsViews
 ipcMain.on('register-view', (e, wcId) => { const wc = webContents.fromId(wcId); if (wc) wireGuest(wc, BrowserWindow.fromWebContents(e.sender) || win); });
 
 // ---- WebContentsView tab engine (each tab is a main-owned view; survives moving between windows) ----
-const guestViews = new Map();   // `${windowWcId}:${vid}` -> WebContentsView
-function gKey(winWcId, vid) { return winWcId + ':' + vid; }
-function gResolve(e, vid) { const w = BrowserWindow.fromWebContents(e.sender); return w ? (guestViews.get(gKey(w.webContents.id, vid)) || null) : null; }
+const guestViews = new Map();   // `${chromeWcId}:${vid}` -> WebContentsView  (keyed by the chrome view that owns the tab)
+function gKey(chromeWcId, vid) { return chromeWcId + ':' + vid; }
+function gResolve(e, vid) { return guestViews.get(gKey(e.sender.id, vid)) || null; }
 ipcMain.on('view-create', (e, o) => {
   try {
-    const w = BrowserWindow.fromWebContents(e.sender); if (!w) return;
+    const w = senderWin(e); if (!w) return;
     try { configurePartition(o.partition); } catch (_) {}
     const view = new WebContentsView({ webPreferences: { partition: o.partition, preload: path.join(__dirname, 'mm-nt-preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: true } });
     try { view.setBackgroundColor('#061215'); } catch (_) {}
     w.contentView.addChildView(view);
+    chromeToTop(w);   // keep the chrome UI layer above the page views
     view.setVisible(false);
-    guestViews.set(gKey(w.webContents.id, o.vid), view);
+    guestViews.set(gKey(e.sender.id, o.vid), view);
     const wc = view.webContents;
     try { wc.setMaxListeners(40); } catch (_) {}   // we attach ~15 listeners across events per view
     wireGuest(wc, w);
-    const send = (event, payload) => { try { if (!w.isDestroyed()) w.webContents.send('view-event', { vid: o.vid, event: event, payload: payload }); } catch (_) {} };
+    const send = (event, payload) => { try { csend(w, 'view-event', { vid: o.vid, event: event, payload: payload }); } catch (_) {} };
     wc.on('page-title-updated', (e2, title) => send('page-title-updated', { title: title }));
     wc.on('page-favicon-updated', (e2, favicons) => send('page-favicon-updated', { favicons: favicons }));
     wc.on('did-start-loading', () => send('did-start-loading', {}));
@@ -526,8 +533,8 @@ ipcMain.on('view-create', (e, o) => {
 ipcMain.on('view-bounds', (e, d) => { const v = gResolve(e, d.vid); if (v) try { v.setBounds({ x: Math.round(d.x), y: Math.round(d.y), width: Math.round(d.width), height: Math.round(d.height) }); v.setVisible(true); } catch (_) {} });
 ipcMain.on('view-hide', (e, d) => { const v = gResolve(e, d.vid); if (v) try { v.setVisible(false); } catch (_) {} });
 ipcMain.on('view-destroy', (e, d) => {
-  const w = BrowserWindow.fromWebContents(e.sender); if (!w) return;
-  const k = gKey(w.webContents.id, d.vid); const v = guestViews.get(k); if (!v) return;
+  const w = senderWin(e); if (!w) return;
+  const k = gKey(e.sender.id, d.vid); const v = guestViews.get(k); if (!v) return;
   guestViews.delete(k);
   const wc = v.webContents;
   try { wc.setAudioMuted(true); } catch (_) {}
@@ -603,7 +610,7 @@ ipcMain.handle('ytdlp-download', async (e, url, quality) => {
   const bin = ytDlpPath();
   try {
     if (!fs.existsSync(bin)) {
-      if (win) win.webContents.send('ytdlp-progress', { id, line: 'Fetching the yt-dlp engine (first use)…' });
+      if (win) csend(win, 'ytdlp-progress', { id, line: 'Fetching the yt-dlp engine (first use)…' });
       fs.mkdirSync(path.dirname(bin), { recursive: true });
       const r = await fetch('https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe');
       if (!r.ok) throw 0;
@@ -615,11 +622,11 @@ ipcMain.handle('ytdlp-download', async (e, url, quality) => {
   const fmt = QUALITY_FMT[quality] || QUALITY_FMT.best;
   const child = spawn(bin, ['-f', fmt, '-o', path.join(dir, '%(title).80s [%(id)s].%(ext)s'), '--no-playlist', '--no-mtime', '--newline', url]);
   let lastPct = 0;
-  const onData = (d) => { const s = d.toString(); const m = s.match(/([\d.]+)%/); if (m) lastPct = parseFloat(m[1]); if (win) win.webContents.send('ytdlp-progress', { id, pct: lastPct, line: s.trim().slice(0, 160) }); };
+  const onData = (d) => { const s = d.toString(); const m = s.match(/([\d.]+)%/); if (m) lastPct = parseFloat(m[1]); if (win) csend(win, 'ytdlp-progress', { id, pct: lastPct, line: s.trim().slice(0, 160) }); };
   child.stdout.on('data', onData);
   child.stderr.on('data', onData);
-  child.on('error', () => { if (win) win.webContents.send('ytdlp-progress', { id, done: true, ok: false }); });
-  child.on('close', (code) => { if (win) win.webContents.send('ytdlp-progress', { id, pct: code === 0 ? 100 : lastPct, done: true, ok: code === 0 }); });
+  child.on('error', () => { if (win) csend(win, 'ytdlp-progress', { id, done: true, ok: false }); });
+  child.on('close', (code) => { if (win) csend(win, 'ytdlp-progress', { id, pct: code === 0 ? 100 : lastPct, done: true, ok: code === 0 }); });
   return { ok: true, id };
 });
 // sync read for the webview preload's anti-flash dark background (runs at document-start)

@@ -229,20 +229,25 @@ function renderTabs() {
 }
 
 /* ---------- split view (two panes side by side in the same window) ---------- */
-// when any HTML overlay (panel/dropdown/modal) is up, freeze the page as a backdrop snapshot and hide the
-// live view — so panels float over a dimmable page and dropdowns sit over it without pushing it around.
+// The chrome is a transparent view sitting OVER the live page. Normally it's sized to just the toolbar strip,
+// so the page below stays fully interactive. When any overlay/menu/dropdown opens we tell main to expand the
+// chrome to the full window, so panels and menus float over the live page (which keeps playing) and nothing
+// gets clipped — then shrink back to the strip when they close.
 function anyOverlayOpen() {
-  const open = (id) => { const e = $(id); return !!(e && !e.classList.contains('hidden')); };
-  if (open('settings') || open('notes-panel') || open('list-panel')) return true;
-  const has = (id, cls) => { const e = $(id); return !!(e && e.classList.contains(cls)); };
-  if (has('omni-suggest', 'open') || has('folder-pop', 'open') || has('folder-pop-2', 'open')) return true;
-  if (document.querySelector('.confirm-ov')) return true;
+  const shown = (id) => { const e = $(id); return !!(e && !e.classList.contains('hidden')); };
+  if (shown('settings') || shown('notes-panel') || shown('list-panel') || shown('findbar') || shown('ws-menu')) return true;
+  if (document.querySelector('.omni-suggest.open, .folder-pop.open, .soc-overflow.open, #ctx-menu, .confirm-ov')) return true;
   return false;
 }
-let _overlayActive = false;
+function stripHeight() { try { return Math.max(1, Math.ceil(viewsEl.getBoundingClientRect().top)) || 92; } catch (_) { return 92; } }
+let _chromeFull = null;
+function pushChromeBounds() {
+  const full = anyOverlayOpen(); _chromeFull = full;
+  try { window.materia.chromeBounds({ full: full, stripH: stripHeight() }); } catch (_) {}
+}
+function syncChrome() { if (anyOverlayOpen() !== _chromeFull) pushChromeBounds(); }
 function layoutViews() {
   if (splitId && !tabs.some(t => t.id === splitId && t.wsId === activeWsId && t.id !== activeId)) splitId = null;
-  if (_overlayActive) { tabs.forEach(t => window.materia.viewHide({ vid: t.id })); return; }   // overlay up — page shown via snapshot
   const on = !!splitId;
   const r = viewsEl.getBoundingClientRect();
   const X = r.left, Y = r.top, W = r.width, H = r.height, halfW = Math.round(W / 2);
@@ -253,24 +258,10 @@ function layoutViews() {
     else if (!on && left) window.materia.viewBounds({ vid: t.id, x: X, y: Y, width: W, height: H });
     else window.materia.viewHide({ vid: t.id });
   });
+  pushChromeBounds();
 }
 window.addEventListener('resize', () => { try { layoutViews(); } catch (_) {} });
-async function updateOverlayState() {
-  const open = anyOverlayOpen();
-  if (open === _overlayActive) return;
-  _overlayActive = open;
-  if (open) {
-    const t = activeTab(); let snap = null;
-    if (t) { try { snap = await window.materia.viewCapture({ vid: t.id }); } catch (_) {} }
-    if (!_overlayActive) return;   // overlay was dismissed during the async capture
-    if (snap) { viewsEl.style.backgroundImage = 'url("' + snap + '")'; viewsEl.style.backgroundSize = '100% 100%'; viewsEl.style.backgroundRepeat = 'no-repeat'; }
-    tabs.forEach(tt => window.materia.viewHide({ vid: tt.id }));
-  } else {
-    viewsEl.style.backgroundImage = '';
-    layoutViews();
-  }
-}
-{ let _vt = null; const obs = new MutationObserver(() => { clearTimeout(_vt); _vt = setTimeout(() => { try { updateOverlayState(); } catch (_) {} }, 16); }); obs.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] }); }
+{ let _vt = null; const obs = new MutationObserver(() => { clearTimeout(_vt); _vt = setTimeout(() => { try { syncChrome(); } catch (_) {} }, 16); }); obs.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style'] }); }
 function openInSplit(id) {
   if (id === activeId || !tabs.some(t => t.id === id && t.wsId === activeWsId)) {
     const t = makeTab(activeWsId, null);   // spawn a fresh tab for the second pane
