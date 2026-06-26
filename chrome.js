@@ -10,7 +10,13 @@ const OMNI_ICONS = {
   lock: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>',
   warn: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2 20h20z"/><path d="M12 9v5M12 17.4v.1"/></svg>'
 };
-const UNBLOCK_JS = "(function(){if(window.__mmu)return;window.__mmu=1;function a(e){e.stopImmediatePropagation();}['contextmenu','selectstart','copy','cut','dragstart'].forEach(function(t){window.addEventListener(t,a,true);document.addEventListener(t,a,true);});try{document.oncontextmenu=null;document.onselectstart=null;document.oncopy=null;}catch(_){}var s=document.createElement('style');s.textContent='*{-webkit-user-select:text!important;user-select:text!important;-webkit-touch-callout:default!important}';(document.head||document.documentElement).appendChild(s);})();";
+// Unblock copy/right-click/select WITHOUT breaking the page's own drag-and-drop. We deliberately do NOT
+// stopImmediatePropagation on 'dragstart' — doing so fired before the page's dragstart handler and killed
+// legit in-page DnD (dragging an image into a drop box never populated dataTransfer). Instead we defeat the
+// common image-drag blocks passively: null document.ondragstart (property-handler blocks) + force img
+// -webkit-user-drag:auto (CSS blocks). Listener-based dragstart blockers are left alone (rare, not worth
+// breaking every web app's drag-and-drop for).
+const UNBLOCK_JS = "(function(){if(window.__mmu)return;window.__mmu=1;function a(e){e.stopImmediatePropagation();}['contextmenu','selectstart','copy','cut'].forEach(function(t){window.addEventListener(t,a,true);document.addEventListener(t,a,true);});try{document.oncontextmenu=null;document.onselectstart=null;document.oncopy=null;document.ondragstart=null;}catch(_){}var s=document.createElement('style');s.textContent='*{-webkit-user-select:text!important;user-select:text!important;-webkit-touch-callout:default!important}img{-webkit-user-drag:auto!important}';(document.head||document.documentElement).appendChild(s);})();";
 
 // Prefill an AI chat's input box with the start-page query, once the page renders.
 function aiPrefillJS(query) {
