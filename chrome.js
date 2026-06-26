@@ -253,9 +253,9 @@ function renderTabs() {
     el.addEventListener('click', () => activateTab(t.id));
     el.addEventListener('auxclick', (e) => { if (e.button === 1) closeTab(t.id); });
     el.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); showTabMenu(t, e.clientX, e.clientY); });
-    el.addEventListener('dragstart', (e) => { dragTabId = t.id; el.classList.add('dragging'); document.body.classList.add('tab-dragging'); try { e.dataTransfer.effectAllowed = 'move'; } catch (_) {} });
+    el.addEventListener('dragstart', (e) => { dragTabId = t.id; el.classList.add('dragging'); document.body.classList.add('tab-dragging'); applyChrome(); try { e.dataTransfer.effectAllowed = 'move'; } catch (_) {} });
     el.addEventListener('dragend', (e) => {
-      el.classList.remove('dragging'); document.body.classList.remove('tab-dragging'); const torn = dragTabId; dragTabId = null;
+      el.classList.remove('dragging'); document.body.classList.remove('tab-dragging'); const torn = dragTabId; dragTabId = null; applyChrome();
       // dropped outside this window's bounds → tear the tab into its own window
       if (torn === t.id && (e.screenX || e.screenY)) {
         const out = e.screenX < window.screenX || e.screenX > window.screenX + window.outerWidth || e.screenY < window.screenY || e.screenY > window.screenY + window.outerHeight;
@@ -289,7 +289,10 @@ let _lastY = 9999;   // last pointer Y inside the chrome; start in the content r
 // address bar, menus and dropdowns are interactive and render over the page); it tucks BEHIND the page while
 // the pointer is over the content (so the page is clickable). Because every menu/dropdown opens from a toolbar
 // click, the chrome is already on top when it appears — no reorder mid-open, which would blur and dismiss it.
-function desiredTop() { return anyOverlayOpen() || _lastY < stripHeight(); }
+// While a tab is being dragged, keep the chrome on top across the whole window so its document-level
+// dragover (which marks the window a valid move-target) suppresses the OS "no-drop" cursor everywhere —
+// otherwise the cursor sits over the page view, which rejects the drag, and shows 🚫 even though releasing docks fine.
+function desiredTop() { return dragTabId != null || anyOverlayOpen() || _lastY < stripHeight(); }
 function applyChrome() {
   const top = desiredTop();
   if (top === _chromeFull) return;

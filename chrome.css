@@ -35,9 +35,9 @@ body{
 #nav-mm{padding:0}
 #nav-mm img{width:19px; height:19px; object-fit:contain; display:block; filter:brightness(0) invert(1); opacity:.78; transition:opacity .15s}
 #nav-mm:hover img{opacity:1; filter:brightness(0) invert(1) drop-shadow(0 0 4px var(--teal))}
-#tabs{display:flex; align-items:flex-end; gap:3px; -webkit-app-region:no-drag; max-width:62vw; overflow:hidden}
+#tabs{display:flex; align-items:flex-end; gap:3px; -webkit-app-region:no-drag; max-width:66vw; overflow:hidden}
 .tab{
-  display:flex; align-items:center; gap:7px; min-width:118px; max-width:212px; height:32px;
+  display:flex; align-items:center; gap:7px; flex:0 1 178px; min-width:46px; max-width:212px; height:32px;
   padding:0 9px; border-radius:8px 8px 0 0; cursor:default; position:relative;
   background:rgba(255,255,255,.018); border:1px solid transparent; border-bottom:none;
   color:var(--ink-faint); transition:background .15s,color .15s;
@@ -51,11 +51,14 @@ body{
 .tab-fav{width:15px; height:15px; flex:0 0 auto; object-fit:contain; border-radius:3px}
 .tab-fav.placeholder{background:radial-gradient(circle at 34% 32%,var(--teal-bright),var(--teal) 58%,var(--teal-dim)); box-shadow:0 0 7px var(--teal),0 0 2px var(--teal); border-radius:50%}
 .tab-title{flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:12px}
+/* Close button is absolutely pinned to the tab's right edge (out of the flex flow) so tabs can shrink
+   small enough to all fit — keeping the ✕ on the rightmost tab reachable instead of clipped off-strip. */
 .tab-close{
-  flex:0 0 auto; width:17px; height:17px; border-radius:5px; border:none; background:transparent;
-  color:var(--ink-faint); cursor:pointer; font-size:12px; line-height:1; opacity:0; transition:.15s;
+  position:absolute; right:4px; top:50%; transform:translateY(-50%);
+  width:17px; height:17px; border-radius:5px; border:none; background:transparent;
+  color:var(--ink-faint); cursor:pointer; font-size:12px; line-height:1; opacity:0; transition:opacity .15s;
 }
-.tab:hover .tab-close,.tab.active .tab-close{opacity:1}
+.tab:hover .tab-close,.tab.active .tab-close{opacity:1; background:var(--bg-3)}
 .tab-close:hover{background:rgba(255,90,80,.18); color:#ff8f86}
 .tab-add{margin:0 0 7px 2px}
 #newtab{
@@ -66,7 +69,7 @@ body{
   transition:background .15s, color .15s; -webkit-app-region:no-drag;
 }
 #newtab:hover{ background:rgba(var(--teal-rgb),.08); color:var(--ink) }
-.tab.pinned{ min-width:0; max-width:none; width:36px; padding:0; justify-content:center; gap:0 }
+.tab.pinned{ flex:0 0 auto; min-width:36px; max-width:none; width:36px; padding:0; justify-content:center; gap:0 }
 .tab.pinned .tab-fav{ width:16px; height:16px }
 .ctx-menu{ position:fixed; z-index:10000; min-width:178px; background:var(--bg-2); border:1px solid var(--line); border-radius:9px; box-shadow:0 16px 40px rgba(0,0,0,.55); padding:5px; display:flex; flex-direction:column; gap:1px }
 .ctx-item{ text-align:left; padding:7px 11px; border:none; background:transparent; color:var(--ink-dim); cursor:pointer; border-radius:6px; font-family:var(--ui); font-size:12.5px }
@@ -272,7 +275,7 @@ body.fullscreen #titlebar, body.fullscreen #toolbar, body.fullscreen #bookmarks,
 .bm-item:hover .bm-x{ opacity:1 }
 .bm-x:hover{ color:var(--ink); background:rgba(var(--teal-rgb),.2) }
 .bm-empty{ color:var(--ink-faint); font-size:11.5px; font-family:var(--ui); padding-left:4px; font-style:italic }
-.bm-rename{ width:128px; padding:2px 6px; background:var(--bg); border:1px solid var(--teal); border-radius:5px; color:var(--ink); outline:none; font-size:12px; font-family:var(--ui) }
+.bm-rename{ box-sizing:border-box; width:128px; height:24px; line-height:1; margin:0; vertical-align:middle; padding:0 6px; background:var(--bg); border:1px solid var(--teal); border-radius:5px; color:var(--ink); outline:none; font-size:12px; font-family:var(--ui) }
 /* bookmark folders */
 .bm-add{ display:flex; align-items:center; justify-content:center; width:26px; height:26px; flex:none; padding:0; border:none; background:transparent; cursor:pointer; border-radius:7px; color:var(--ink-faint); font-size:18px; line-height:1; transition:background .15s, color .15s }
 .bm-add:hover{ background:rgba(var(--teal-rgb),.12); color:var(--teal) }

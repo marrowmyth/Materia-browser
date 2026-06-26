@@ -189,10 +189,18 @@ function safeBlockPage(blockedUrl) {
   return 'data:text/html;charset=utf-8,' + encodeURIComponent(html);
 }
 
+// Map the preferred language to a spell-checker locale Electron supports (fallback en-US).
+function spellLangs() {
+  const l = acceptLang || 'en-US';
+  const code = /-/.test(l) ? l : ({ en: 'en-US', es: 'es-ES', fr: 'fr-FR', de: 'de-DE', pt: 'pt-BR', it: 'it-IT', nl: 'nl-NL', ru: 'ru-RU', pl: 'pl-PL' }[l] || l);
+  return [code];
+}
 function configurePartition(partition) {
   if (configured.has(partition)) return session.fromPartition(partition);
   configured.add(partition);
   const ses = session.fromPartition(partition);
+  // Spell-check editable fields so right-click offers corrections + "Add to dictionary".
+  try { ses.setSpellCheckerLanguages(spellLangs()); } catch (_) { try { ses.setSpellCheckerLanguages(['en-US']); } catch (__) {} }
 
   // Block trackers + hyperlink-auditing pings; strip click-tracking params; Safe Browsing.
   ses.webRequest.onBeforeRequest((details, cb) => {
@@ -460,6 +468,14 @@ function popupContextMenu(wc, params) {
     items.push({ type: 'separator' });
   }
   if (params.isEditable) {
+    if (params.misspelledWord) {
+      const sugg = params.dictionarySuggestions || [];
+      if (sugg.length) sugg.slice(0, 5).forEach(s => items.push({ label: s, click: () => { try { wc.replaceMisspelling(s); } catch (_) {} } }));
+      else items.push({ label: 'No spelling suggestions', enabled: false });
+      items.push({ type: 'separator' });
+      items.push({ label: 'Add to dictionary', click: () => { try { wc.session.addWordToSpellCheckerDictionary(params.misspelledWord); } catch (_) {} } });
+      items.push({ type: 'separator' });
+    }
     items.push({ role: 'cut', enabled: params.editFlags.canCut });
     items.push({ role: 'copy', enabled: params.editFlags.canCopy });
     items.push({ role: 'paste', enabled: params.editFlags.canPaste });
@@ -654,7 +670,7 @@ ipcMain.handle('add-trusted', (e, host) => { const h = normTrustHost(host); if (
 ipcMain.handle('remove-trusted', (e, host) => { trustedHosts.delete(String(host || '').toLowerCase()); persistTrusted(); return Array.from(trustedHosts); });
 ipcMain.handle('is-trusted', (e, url) => isTrustedHost(hostOf(String(url || ''))));
 ipcMain.handle('get-settings', () => ({ blockTrackers, language: acceptLang }));
-ipcMain.handle('set-language', (e, v) => { acceptLang = String(v || 'en-US'); prefs.language = acceptLang; writePrefs(prefs); return acceptLang; });
+ipcMain.handle('set-language', (e, v) => { acceptLang = String(v || 'en-US'); prefs.language = acceptLang; writePrefs(prefs); try { configured.forEach(p => { try { session.fromPartition(p).setSpellCheckerLanguages(spellLangs()); } catch (_) {} }); } catch (_) {} return acceptLang; });
 ipcMain.handle('adblock-status', () => ({ status: blockerStatus, blocked: blockedCount }));
 ipcMain.on('mm-get-provider', (e) => { e.returnValue = prefs.searchProvider || 'ddg'; });
 ipcMain.on('mm-get-version', (e) => { e.returnValue = app.getVersion(); });   // start page shows the running version
