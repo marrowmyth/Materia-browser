@@ -41,6 +41,7 @@ contextBridge.exposeInMainWorld('materia', {
   setLanguage: (v) => ipcRenderer.invoke('set-language', v),
   suggest: (q) => ipcRenderer.invoke('suggest', q),
   getProvider: () => { try { return ipcRenderer.sendSync('mm-get-provider'); } catch (_) { return 'ddg'; } },
+  appVersion: (function () { try { return ipcRenderer.sendSync('mm-get-version'); } catch (_) { return ''; } })(),
   setProvider: (id) => ipcRenderer.invoke('set-provider', id),
   getCosmetics: (url) => ipcRenderer.invoke('get-cosmetics', url),
   openExternal: (url) => ipcRenderer.invoke('open-external', url),

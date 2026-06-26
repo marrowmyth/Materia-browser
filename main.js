@@ -2,6 +2,7 @@
 const { app, BrowserWindow, WebContentsView, session, ipcMain, shell, webContents, nativeTheme, Menu, clipboard, dialog, Notification, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const { pathToFileURL } = require('url');
 const { spawn, execFile } = require('child_process');
 
 // Log uncaught main-process errors to a file instead of popping Electron's default
@@ -49,9 +50,21 @@ try { app.commandLine.appendSwitch('enable-features', 'ParallelDownloading'); } 
 // just focuses the existing window instead of fighting over the disk cache (the cause
 // of the "Unable to move/create cache · Access is denied" errors).
 // a URL handed to us when Windows launches Materia as the default browser
-function urlFromArgv(argv) { try { const u = (argv || []).find(a => /^https?:\/\//i.test(a)); return u || null; } catch (_) { return null; } }
+// Pull a loadable URL from launch args: an http(s)/file URL, OR a local file PATH
+// (Windows hands us a bare path like C:\page.html when Materia opens an .html as the default browser).
+function urlFromArgv(argv) {
+  try {
+    const args = (argv || []).slice(1).filter(a => a && !/^--?[a-z]/i.test(a));   // drop the exe arg + any --switches
+    for (const a of args) {
+      if (/^(https?|file):\/\//i.test(a)) return a;                               // already a URL
+      try { if (fs.existsSync(a)) return pathToFileURL(path.resolve(a)).href; } catch (_) {}   // local file/folder → file:// URL
+    }
+    return null;
+  } catch (_) { return null; }
+}
 let pendingLaunchUrl = process.platform === 'win32' ? urlFromArgv(process.argv) : null;
-if (!app.requestSingleInstanceLock()) {
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) {
   app.quit();
 } else {
   app.on('second-instance', (e, argv) => {
@@ -327,7 +340,7 @@ function createWindow(opts) {
   w.on('unmaximize', () => csend(w, 'win-state', false));
   w.on('enter-full-screen', () => csend(w, 'fullscreen', true));
   w.on('leave-full-screen', () => csend(w, 'fullscreen', false));
-  w.on('closed', () => { const cv = chromeViews.get(w); if (cv) winOfChrome.delete(cv.webContents.id); chromeViews.delete(w); if (win === w) win = null; });
+  w.on('closed', () => { try { const cv = chromeViews.get(w); if (cv && cv.webContents && !cv.webContents.isDestroyed()) winOfChrome.delete(cv.webContents.id); } catch (_) {} chromeViews.delete(w); if (win === w) win = null; });
   w.on('app-command', (e, cmd) => { if (cmd === 'browser-backward') { e.preventDefault(); csend(w, 'shortcut', 'back'); } else if (cmd === 'browser-forward') { e.preventDefault(); csend(w, 'shortcut', 'forward'); } });
   return w;
 }
@@ -352,6 +365,7 @@ async function checkForUpdate() {
   } catch (_) {}
 }
 app.whenReady().then(() => {
+  if (!gotLock) return;   // 2nd instance (lock not acquired): never open a window — prevents the flash+close crash when opening a file while already running
   // "VPN-grade" baseline: encrypted DNS so your ISP can't see your lookups.
   try {
     app.configureHostResolver({
