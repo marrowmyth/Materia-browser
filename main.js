@@ -571,7 +571,7 @@ ipcMain.on('view-create', (e, o) => {
   try {
     const w = senderWin(e); if (!w) return;
     try { configurePartition(o.partition); } catch (_) {}
-    const view = new WebContentsView({ webPreferences: { partition: o.partition, preload: path.join(__dirname, 'mm-nt-preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: true } });
+    const view = new WebContentsView({ webPreferences: { partition: o.partition, preload: path.join(__dirname, 'mm-nt-preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: true, plugins: true } });   // plugins:true enables Chromium's built-in PDF viewer (PDFium) so PDFs render inline instead of blanking out
     try { view.setBackgroundColor('#061215'); } catch (_) {}
     w.contentView.addChildView(view);
     if (w._chromeFull) chromeToTop(w); else chromeToBottom(w);   // restore correct z-order after inserting the page view
