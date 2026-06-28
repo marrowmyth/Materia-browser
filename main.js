@@ -752,39 +752,146 @@ ipcMain.handle('set-default-browser', async () => {
   try { await shell.openExternal('ms-settings:defaultapps'); } catch (_) {}
   return { ok: true, isDefault: isDefaultBrowser() };
 });
-// ---- video downloader (yt-dlp) ----
+// ---- video downloader (yt-dlp + ffmpeg) ----
+// Prefer mp4 video + m4a audio so the ffmpeg merge yields a clean .mp4; fall back to any best
+// video+audio, then a progressive single file. Real 1080p/4K is separate streams that need ffmpeg.
 const QUALITY_FMT = {
-  best: 'best[ext=mp4]/best',
-  '1080': 'best[height<=1080][ext=mp4]/best[height<=1080]/best',
-  '720': 'best[height<=720][ext=mp4]/best[height<=720]/best',
-  '480': 'best[height<=480][ext=mp4]/best[height<=480]/best',
-  audio: 'bestaudio[ext=m4a]/bestaudio'
+  best:   'bv*[ext=mp4]+ba[ext=m4a]/bv*+ba/b',
+  '1080': 'bv*[height<=1080][ext=mp4]+ba[ext=m4a]/bv*[height<=1080]+ba/b[height<=1080]/b',
+  '720':  'bv*[height<=720][ext=mp4]+ba[ext=m4a]/bv*[height<=720]+ba/b[height<=720]/b',
+  '480':  'bv*[height<=480][ext=mp4]+ba[ext=m4a]/bv*[height<=480]+ba/b[height<=480]/b',
+  audio:  'ba[ext=m4a]/ba/b'
 };
-function ytDlpPath() { return path.join(app.getPath('userData'), 'bin', 'yt-dlp.exe'); }
+function binDir() { return path.join(app.getPath('userData'), 'bin'); }
+function ytDlpPath() { return path.join(binDir(), 'yt-dlp.exe'); }
+function ffmpegPath() { return path.join(binDir(), 'ffmpeg.exe'); }
+
+async function fetchToFile(url, dest) {
+  const r = await fetch(url, { redirect: 'follow' });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  fs.writeFileSync(dest, Buffer.from(await r.arrayBuffer()));
+}
+
+// yt-dlp goes stale fast (YouTube keeps changing) — refetch the latest if missing or >2 days old.
+async function ensureYtDlp(say) {
+  const bin = ytDlpPath();
+  let stale = !fs.existsSync(bin);
+  if (!stale) { try { stale = (Date.now() - fs.statSync(bin).mtimeMs) > 2 * 864e5; } catch (_) {} }
+  if (!stale) return;
+  try {
+    if (say) say(fs.existsSync(bin) ? 'Updating the yt-dlp engine…' : 'Fetching the yt-dlp engine (first use)…');
+    fs.mkdirSync(binDir(), { recursive: true });
+    await fetchToFile('https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe', bin + '.new');
+    try { fs.rmSync(bin, { force: true }); } catch (_) {}
+    fs.renameSync(bin + '.new', bin);
+  } catch (e) {
+    try { fs.unlinkSync(bin + '.new'); } catch (_) {}
+    if (!fs.existsSync(bin)) throw new Error('Could not download yt-dlp — check your connection');
+    // update failed but a usable copy already exists — carry on with it
+  }
+}
+
+// ffmpeg is required to merge YouTube's separate video+audio streams (1080p/4K). Fetched once.
+let _ffmpegPromise = null;
+function ensureFfmpeg(say) {
+  if (fs.existsSync(ffmpegPath())) return Promise.resolve();
+  if (_ffmpegPromise) return _ffmpegPromise;
+  _ffmpegPromise = (async () => {
+    if (say) say('Fetching the video converter (ffmpeg, ~40 MB, one time)…');
+    fs.mkdirSync(binDir(), { recursive: true });
+    const zip = path.join(binDir(), 'ffmpeg.zip');
+    const exDir = path.join(binDir(), '_ffx');
+    await fetchToFile('https://github.com/yt-dlp/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-win64-gpl.zip', zip);
+    try { fs.rmSync(exDir, { recursive: true, force: true }); } catch (_) {}
+    const q = (s) => s.replace(/'/g, "''");
+    await new Promise((res, rej) => execFile('powershell', ['-NoProfile', '-NonInteractive', '-Command',
+      "Expand-Archive -LiteralPath '" + q(zip) + "' -DestinationPath '" + q(exDir) + "' -Force"], (err) => err ? rej(err) : res()));
+    const find = (name) => {
+      const stack = [exDir];
+      while (stack.length) {
+        const d = stack.pop();
+        for (const ent of fs.readdirSync(d, { withFileTypes: true })) {
+          const p = path.join(d, ent.name);
+          if (ent.isDirectory()) stack.push(p);
+          else if (ent.name.toLowerCase() === name) return p;
+        }
+      }
+      return null;
+    };
+    const ff = find('ffmpeg.exe');
+    if (!ff) throw new Error('ffmpeg.exe not found in archive');
+    fs.copyFileSync(ff, ffmpegPath());
+    const fp = find('ffprobe.exe');
+    if (fp) { try { fs.copyFileSync(fp, path.join(binDir(), 'ffprobe.exe')); } catch (_) {} }
+    try { fs.rmSync(exDir, { recursive: true, force: true }); } catch (_) {}
+    try { fs.unlinkSync(zip); } catch (_) {}
+  })().catch((e) => { _ffmpegPromise = null; throw e; });
+  return _ffmpegPromise;
+}
+
+// Pull the user's session cookies for the target site (decrypted in-process, so none of the
+// DPAPI / App-Bound-Encryption breakage that kills yt-dlp's --cookies-from-browser) and hand them
+// to yt-dlp. This is what clears YouTube's "confirm you're not a bot" wall — using the browser's
+// own logged-in session.
+async function cookieFileFor(url) {
+  let host = ''; try { host = new URL(url).hostname; } catch (_) { return null; }
+  const base = host.split('.').slice(-2).join('.');
+  const domains = base === 'youtube.com' ? ['youtube.com', 'google.com'] : [base];
+  const seen = new Set(); const rows = [];
+  for (const part of configured) {
+    let ses; try { ses = session.fromPartition(part); } catch (_) { continue; }
+    for (const dom of domains) {
+      let cks = []; try { cks = await ses.cookies.get({ domain: dom }); } catch (_) {}
+      for (const c of cks) {
+        const k = c.domain + '|' + c.name + '|' + c.path;
+        if (seen.has(k)) continue; seen.add(k);
+        const dm = (c.httpOnly ? '#HttpOnly_' : '') + c.domain;
+        rows.push([dm, c.domain.startsWith('.') ? 'TRUE' : 'FALSE', c.path || '/',
+          c.secure ? 'TRUE' : 'FALSE', c.expirationDate ? Math.floor(c.expirationDate) : 0, c.name, c.value].join('\t'));
+      }
+    }
+  }
+  if (!rows.length) return null;
+  const f = path.join(binDir(), 'cookies.txt');
+  fs.writeFileSync(f, '# Netscape HTTP Cookie File\n' + rows.join('\n') + '\n');
+  return f;
+}
+
 let _vdSeq = 0;
 ipcMain.handle('ytdlp-download', async (e, url, quality) => {
-  url = String(url || '').trim(); if (!/^https?:/i.test(url)) return { ok: false, error: 'Enter a valid URL' };
+  url = String(url || '').trim();
+  if (!/^https?:/i.test(url)) return { ok: false, error: 'Enter a valid URL' };
   const id = 'v' + (++_vdSeq);
-  const bin = ytDlpPath();
+  const say = (line) => { if (win) csend(win, 'ytdlp-progress', { id, line }); };
   try {
-    if (!fs.existsSync(bin)) {
-      if (win) csend(win, 'ytdlp-progress', { id, line: 'Fetching the yt-dlp engine (first use)…' });
-      fs.mkdirSync(path.dirname(bin), { recursive: true });
-      const r = await fetch('https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe');
-      if (!r.ok) throw 0;
-      fs.writeFileSync(bin, Buffer.from(await r.arrayBuffer()));
-    }
-  } catch (_) { return { ok: false, error: 'Could not download yt-dlp' }; }
+    await ensureYtDlp(say);
+    if (quality !== 'audio') await ensureFfmpeg(say);
+  } catch (err) {
+    return { ok: false, error: (err && err.message) || 'Could not set up the downloader' };
+  }
   let dir = (prefs.dlDirs && prefs.dlDirs.video) || app.getPath('downloads');
   try { fs.mkdirSync(dir, { recursive: true }); } catch (_) {}
   const fmt = QUALITY_FMT[quality] || QUALITY_FMT.best;
-  const child = spawn(bin, ['-f', fmt, '-o', path.join(dir, '%(title).80s [%(id)s].%(ext)s'), '--no-playlist', '--no-mtime', '--newline', url]);
-  let lastPct = 0;
-  const onData = (d) => { const s = d.toString(); const m = s.match(/([\d.]+)%/); if (m) lastPct = parseFloat(m[1]); if (win) csend(win, 'ytdlp-progress', { id, pct: lastPct, line: s.trim().slice(0, 160) }); };
+  const ck = await cookieFileFor(url).catch(() => null);
+  const args = ['-f', fmt, '-o', path.join(dir, '%(title).80s [%(id)s].%(ext)s'),
+    '--no-playlist', '--no-mtime', '--newline', '--ffmpeg-location', ffmpegPath(),
+    // give yt-dlp a JS runtime (YouTube needs one now) via the bundled Electron acting as Node
+    '--js-runtimes', 'node:' + process.execPath];
+  if (ck) args.push('--cookies', ck);
+  if (quality !== 'audio') args.push('--merge-output-format', 'mp4');
+  args.push(url);
+  const child = spawn(ytDlpPath(), args, { env: Object.assign({}, process.env, { ELECTRON_RUN_AS_NODE: '1' }) });
+  let lastPct = 0, errTail = '';
+  const onData = (d) => {
+    const s = d.toString();
+    const m = s.match(/([\d.]+)%/); if (m) lastPct = parseFloat(m[1]);
+    if (/error/i.test(s)) errTail = s.replace(/^[\s\S]*?ERROR:?/i, '').trim().slice(0, 140);
+    if (win) csend(win, 'ytdlp-progress', { id, pct: lastPct, line: s.trim().slice(0, 160) });
+  };
   child.stdout.on('data', onData);
   child.stderr.on('data', onData);
-  child.on('error', () => { if (win) csend(win, 'ytdlp-progress', { id, done: true, ok: false }); });
-  child.on('close', (code) => { if (win) csend(win, 'ytdlp-progress', { id, pct: code === 0 ? 100 : lastPct, done: true, ok: code === 0 }); });
+  child.on('error', () => { if (win) csend(win, 'ytdlp-progress', { id, done: true, ok: false, error: 'Could not start yt-dlp' }); });
+  child.on('close', (code) => { try { if (ck) fs.unlinkSync(ck); } catch (_) {} if (win) csend(win, 'ytdlp-progress', { id, pct: code === 0 ? 100 : lastPct, done: true, ok: code === 0, error: code === 0 ? null : (errTail || 'Download failed') }); });
   return { ok: true, id };
 });
 // sync read for the webview preload's anti-flash dark background (runs at document-start)

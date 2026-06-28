@@ -164,6 +164,22 @@ body{
 
 /* ---- views ---- */
 #views{flex:1; position:relative; background:transparent}   /* the live page view sits behind this; keep it see-through */
+
+/* download shelf — a small footer that appears while files (or videos) are downloading */
+.dl-footer{ flex-shrink:0; display:flex; flex-direction:column; gap:5px; padding:7px 12px; background:var(--bg-2); border-top:1px solid var(--line); max-height:148px; overflow-y:auto }
+.dl-footer.hidden{ display:none }
+.dl-row{ display:flex; align-items:center; gap:10px; font-family:var(--ui); font-size:12px; color:var(--ink) }
+.dl-ico{ flex-shrink:0; width:16px; text-align:center; font-size:13px; color:#2dd4be }
+.dl-row.done .dl-ico{ color:#5fd38a } .dl-row.failed .dl-ico{ color:#ff6b6b }
+.dl-name{ flex-shrink:0; max-width:260px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.dl-bar{ flex:1; min-width:60px; height:5px; border-radius:3px; background:var(--bg-3); overflow:hidden }
+.dl-bar > i{ display:block; height:100%; width:0; background:linear-gradient(90deg,#2dd4be,#36b6a8); transition:width .2s ease }
+.dl-pct{ flex-shrink:0; min-width:40px; text-align:right; color:var(--ink-dim); font-variant-numeric:tabular-nums }
+.dl-row.done .dl-pct{ color:#5fd38a } .dl-row.failed .dl-pct{ color:#ff6b6b }
+.dl-act{ flex-shrink:0; cursor:pointer; color:#2dd4be; padding:2px 7px; border-radius:6px }
+.dl-act:hover{ background:var(--bg-3) }
+.dl-x{ flex-shrink:0; cursor:pointer; color:var(--ink-dim); padding:0 4px; font-size:15px; line-height:1 }
+.dl-x:hover{ color:var(--ink) }
 body.fullscreen #titlebar, body.fullscreen #toolbar, body.fullscreen #bookmarks, body.fullscreen #loadbar{ display:none !important }
 .tab.split-mate{background:var(--bg-3); box-shadow:inset 0 -2px 0 var(--teal)}
 

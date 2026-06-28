@@ -65,6 +65,7 @@
   </div>
 
   <div id="views"></div>
+  <div id="dl-footer" class="dl-footer hidden"></div>
 
   <div id="settings" class="panel hidden">
     <div class="panel-card">
@@ -194,7 +195,7 @@
 
       <div class="set-block">
         <p class="set-heading">Video downloader</p>
-        <p class="set-note" style="margin-bottom:.5rem">Paste any video link — YouTube, Vimeo, X, and thousands more (powered by yt-dlp). Saves to your Videos folder. First use fetches the engine (~15&nbsp;MB).</p>
+        <p class="set-note" style="margin-bottom:.5rem">Paste any video link — YouTube, Vimeo, X, and thousands more (powered by yt-dlp). Saves to your Videos folder. First video download fetches the engine + converter (yt-dlp &amp; ffmpeg, ~55&nbsp;MB, one time); the engine then keeps itself up to date.</p>
         <input id="vd-url" class="mat-input" type="text" spellcheck="false" placeholder="https://…">
         <div class="vd-row">
           <select id="vd-quality" class="mat-select">
