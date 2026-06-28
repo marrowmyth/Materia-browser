@@ -3,7 +3,7 @@ const { app, BrowserWindow, WebContentsView, session, ipcMain, shell, webContent
 const path = require('path');
 const fs = require('fs');
 const { pathToFileURL } = require('url');
-const { spawn, execFile } = require('child_process');
+const { spawn, spawnSync, execFile } = require('child_process');
 
 // Log uncaught main-process errors to a file instead of popping Electron's default
 // "A JavaScript error occurred in the main process" dialog at the user. The app keeps running.
@@ -27,6 +27,15 @@ process.on('unhandledRejection', (reason) => {
 // throw. Catch it, log it, keep running — the user never sees a raw JS-error popup.
 process.on('uncaughtException', (err) => {
   logMainError('uncaughtException', (err && err.stack) || (err && err.message) || String(err));
+});
+// A black/frozen window with no main-error log usually means a renderer or GPU child process
+// died (or the GPU hung). Capture the reason so the next incident isn't a silent mystery.
+app.on('render-process-gone', (_e, _wc, details) => {
+  logMainError('render-process-gone', details ? (details.reason + ' (exit ' + details.exitCode + ')') : 'unknown');
+});
+app.on('child-process-gone', (_e, details) => {
+  if (details && details.reason && details.reason !== 'clean-exit')
+    logMainError('child-process-gone', details.type + ': ' + details.reason + ' (exit ' + details.exitCode + ')');
 });
 
 // ---- persisted prefs (read before app-ready so we can set Chromium flags) ----
@@ -106,6 +115,25 @@ const TRACKERS = [
 function isTracker(url) {
   const u = url.toLowerCase();
   return TRACKERS.some(t => u.includes(t));
+}
+// YouTube streams video/audio over *.googlevideo.com and paces playback off a few youtube.com
+// endpoints (player config, ABR/QoE stats). If the ad/tracker engine cancels one mid-stream the
+// video plays the prebuffered ~30s then stalls like a dropped connection. Never NETWORK-block the
+// player's own machinery — visual ads are still hidden via cosmetic filters and real ad creatives
+// (doubleclick / googlesyndication / /pagead/) stay blocked, so this isn't an ad whitelist.
+function isYouTubeMediaReq(url) {
+  try {
+    const u = new URL(url);
+    const h = u.hostname.toLowerCase();
+    if (/(^|\.)googlevideo\.com$/.test(h)) return true;            // the actual media stream
+    if (/(^|\.)youtube(-nocookie)?\.com$/.test(h) || h === 'youtubei.googleapis.com') {
+      const p = u.pathname.toLowerCase();
+      return p.startsWith('/youtubei/v1/player') || p.startsWith('/youtubei/v1/next')
+          || p.startsWith('/videoplayback') || p.startsWith('/api/stats/')
+          || p.startsWith('/api/timedtext') || p.startsWith('/ptracking') || p === '/generate_204';
+    }
+  } catch (_) {}
+  return false;
 }
 // OAuth / "sign in with…" flows open via window.open and need a REAL popup window — one
 // with window.opener so the provider can postMessage the result back. Routing them to a
@@ -218,6 +246,8 @@ function configurePartition(partition) {
     const top = reqTopUrl(details);
     if (isTrustedHost(hostOf(top))) return cb({});
     if (details.resourceType === 'ping') return cb({ cancel: true });
+    // Don't network-cancel YouTube's player stream/pacing — that's the ~30s-then-stall bug.
+    if (isYouTubeMediaReq(details.url)) return cb({});
     if (blockTrackers && /^https?:/.test(details.url) && isTracker(details.url)) return cb({ cancel: true });
     if (blockAds && blocker && AdReq && /^https?:/.test(details.url)) {
       try { const r = blocker.match(AdReq.fromRawDetails({ type: rType(details.resourceType), url: details.url, sourceUrl: top || details.url })); if (r && r.match) { blockedCount++; return cb({ cancel: true }); } } catch (_) {}
@@ -766,10 +796,33 @@ function binDir() { return path.join(app.getPath('userData'), 'bin'); }
 function ytDlpPath() { return path.join(binDir(), 'yt-dlp.exe'); }
 function ffmpegPath() { return path.join(binDir(), 'ffmpeg.exe'); }
 
+// yt-dlp needs a JS runtime to solve YouTube's nsig challenge. Prefer the user's REAL system
+// Node: pointing yt-dlp at our own Electron binary (process.execPath) re-launches Materia,
+// which bounces off our single-instance lock and can hang the entire main process — i.e. the
+// "video downloader freezes the whole browser" report. Resolve node once and cache it.
+let _jsRuntime;
+function jsRuntimeArgs() {
+  if (_jsRuntime === undefined) {
+    _jsRuntime = null;
+    try {
+      const finder = process.platform === 'win32' ? 'where' : 'which';
+      const r = spawnSync(finder, ['node'], { encoding: 'utf8' });
+      if (r.status === 0 && r.stdout) {
+        const p = r.stdout.split(/\r?\n/).map(s => s.trim()).filter(Boolean)[0];
+        if (p && fs.existsSync(p)) _jsRuntime = p;
+      }
+    } catch (_) {}
+  }
+  // Real Node when present; otherwise fall back to Electron-as-Node (the fragile path).
+  return ['--js-runtimes', 'node:' + (_jsRuntime || process.execPath)];
+}
+
 async function fetchToFile(url, dest) {
   const r = await fetch(url, { redirect: 'follow' });
   if (!r.ok) throw new Error('HTTP ' + r.status);
-  fs.writeFileSync(dest, Buffer.from(await r.arrayBuffer()));
+  // Write on the libuv threadpool, NOT the main thread — a synchronous writeFileSync of the
+  // ~137MB ffmpeg build froze the entire UI (all windows) while it flushed to disk.
+  await fs.promises.writeFile(dest, Buffer.from(await r.arrayBuffer()));
 }
 
 // yt-dlp goes stale fast (YouTube keeps changing) — refetch the latest if missing or >2 days old.
@@ -875,17 +928,20 @@ ipcMain.handle('ytdlp-download', async (e, url, quality) => {
   const ck = await cookieFileFor(url).catch(() => null);
   const args = ['-f', fmt, '-o', path.join(dir, '%(title).80s [%(id)s].%(ext)s'),
     '--no-playlist', '--no-mtime', '--newline', '--ffmpeg-location', ffmpegPath(),
-    // give yt-dlp a JS runtime (YouTube needs one now) via the bundled Electron acting as Node
-    '--js-runtimes', 'node:' + process.execPath];
+    // give yt-dlp a JS runtime for YouTube's nsig — real system Node when available
+    ...jsRuntimeArgs()];
   if (ck) args.push('--cookies', ck);
   if (quality !== 'audio') args.push('--merge-output-format', 'mp4');
   args.push(url);
   const child = spawn(ytDlpPath(), args, { env: Object.assign({}, process.env, { ELECTRON_RUN_AS_NODE: '1' }) });
-  let lastPct = 0, errTail = '';
+  let lastPct = 0, errTail = '', lastEmit = 0;
   const onData = (d) => {
     const s = d.toString();
     const m = s.match(/([\d.]+)%/); if (m) lastPct = parseFloat(m[1]);
     if (/error/i.test(s)) errTail = s.replace(/^[\s\S]*?ERROR:?/i, '').trim().slice(0, 140);
+    const now = Date.now();
+    if (now - lastEmit < 150) return;   // coalesce the --newline flood to ~6 updates/sec
+    lastEmit = now;
     if (win) csend(win, 'ytdlp-progress', { id, pct: lastPct, line: s.trim().slice(0, 160) });
   };
   child.stdout.on('data', onData);
