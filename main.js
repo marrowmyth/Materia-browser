@@ -85,6 +85,7 @@ if (!gotLock) {
       if (win) { if (win.isMinimized()) win.restore(); win.focus(); }
       const u = urlFromArgv(argv); const w = win || BrowserWindow.getAllWindows()[0];
       if (u && w) csend(w, 'open-tab', { url: u });   // default-browser invocation while already running → open a tab
+      maybeCheckForUpdate();   // re-clicking the shortcut while we're already running should still look for a new release
     } catch (_) {}
   });
 }
@@ -394,7 +395,15 @@ function isNewerVer(a, b) {
   for (let i = 0; i < 3; i++) { const d = (pa[i] || 0) - (pb[i] || 0); if (d) return d > 0; }
   return false;
 }
+let lastUpdateCheck = 0;
+// Re-checking on every launch/focus would hammer the GitHub API, so those paths go through this throttle.
+// The cold-start check and the 6h timer call checkForUpdate() directly (unthrottled).
+function maybeCheckForUpdate(minGapMs = 15 * 60 * 1000) {
+  if (Date.now() - lastUpdateCheck < minGapMs) return;
+  checkForUpdate();
+}
 async function checkForUpdate() {
+  lastUpdateCheck = Date.now();
   try {
     const res = await fetch('https://api.github.com/repos/marrowmyth/Materia-browser/releases/latest', { headers: { 'Accept': 'application/vnd.github+json', 'User-Agent': 'Materia-Browser' } });
     if (!res.ok) return;
@@ -421,6 +430,7 @@ app.whenReady().then(() => {
   initSafeBrowsing();
   createWindow();
   setTimeout(checkForUpdate, 8000); setInterval(checkForUpdate, 6 * 3600 * 1000);   // notify when a newer release is published
+  app.on('browser-window-focus', () => maybeCheckForUpdate());   // returning to the window re-checks (throttled) so same-session releases surface
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
