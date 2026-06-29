@@ -55,6 +55,10 @@ function acceptLangHeader() {
 }
 // modest, safe speed win: chunked parallel downloads for faster large fetches
 try { app.commandLine.appendSwitch('enable-features', 'ParallelDownloading'); } catch (_) {}
+// Windows-only paint-stall fix: Chromium's native occlusion detector sometimes wrongly
+// flags the window as hidden when a new tab re-layers views while a video is decoding,
+// freezing the window until a move/resize forces a recalc. Disabling it stops the freeze.
+try { app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion'); } catch (_) {}
 // Only one Materia instance may use the user-data folder at a time — a second launch
 // just focuses the existing window instead of fighting over the disk cache (the cause
 // of the "Unable to move/create cache · Access is denied" errors).
