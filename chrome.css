@@ -50,7 +50,9 @@ body{
 }
 .tab-fav{width:15px; height:15px; flex:0 0 auto; object-fit:contain; border-radius:3px}
 .tab-fav.placeholder{background:radial-gradient(circle at 34% 32%,var(--teal-bright),var(--teal) 58%,var(--teal-dim)); box-shadow:0 0 7px var(--teal),0 0 2px var(--teal); border-radius:50%}
-.tab-title{flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:12px}
+/* min-width:0 lets the title shrink below its text's intrinsic width so the ellipsis truncates —
+   without it, a notification/message lengthening the title would force the whole tab to "jump" wider. */
+.tab-title{flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:12px}
 /* Close button is absolutely pinned to the tab's right edge (out of the flex flow) so tabs can shrink
    small enough to all fit — keeping the ✕ on the rightmost tab reachable instead of clipped off-strip. */
 .tab-close{
