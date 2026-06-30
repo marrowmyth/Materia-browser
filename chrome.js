@@ -504,7 +504,7 @@ $('nav-back').addEventListener('click', () => { const t = activeTab(); if (t && 
 $('nav-fwd').addEventListener('click', () => { const t = activeTab(); if (t && t.view.canGoForward()) t.view.goForward(); });
 $('nav-reload').addEventListener('click', () => { const t = activeTab(); if (t) t.view.reload(); });
 $('nav-home').addEventListener('click', () => { const t = activeTab(); if (t) t.view.loadURL(newtabUrl()); });
-$('nav-mm').addEventListener('click', () => { const t = activeTab(); if (t && isNewtab(t.url)) t.view.loadURL('https://marrowmyth.com'); else createTab('https://marrowmyth.com'); });
+$('nav-mm').addEventListener('click', () => openInNewTab('https://marrowmyth.com'));
 { const b = $('nav-update'); if (b) b.addEventListener('click', async () => {
   const page = b._url || 'https://github.com/marrowmyth/Materia-browser/releases/latest';
   if (!window.materia.downloadUpdate) { createTab(page); return; }
@@ -914,6 +914,8 @@ function removeBookmark(url) {
 }
 function toggleBookmark() { const t = activeTab(); if (!t || isNewtab(t.url)) return; isBookmarked(t.url) ? removeBookmark(t.url) : addBookmark(t); }
 function openBookmark(url, newTab) { if (newTab) { makeTab(activeWsId, url); renderTabs(); saveSession(); } else { const t = activeTab(); t ? t.view.loadURL(url) : createTab(url); } }
+// open a URL the way the MarrowMyth button does: reuse a blank new-tab page if you're on one, otherwise spawn a fresh tab
+function openInNewTab(url) { const t = activeTab(); if (t && isNewtab(t.url)) t.view.loadURL(url); else createTab(url); }
 function bmFav(b) { if (b.favicon) { const img = document.createElement('img'); img.src = b.favicon; img.onerror = () => img.replaceWith(Object.assign(document.createElement('span'), { className: 'bm-fav-ph' })); return img; } return Object.assign(document.createElement('span'), { className: 'bm-fav-ph' }); }
 function makeBookmarkEl(b) {
   const el = document.createElement('button'); el.className = 'bm-item'; el.title = b.url; el.draggable = true;
@@ -1108,8 +1110,8 @@ function makeSocBtn(s) {
   const url = (socialLinks[s.key] || '').trim();
   const b = document.createElement('button'); b.className = 'bm-soc'; b.title = s.name + ' — ' + url;
   b.innerHTML = socIconSVG(s, 18);
-  b.addEventListener('click', () => openBookmark(socNormUrl(url), false));
-  b.addEventListener('auxclick', (e) => { if (e.button === 1) { e.preventDefault(); openBookmark(socNormUrl(url), true); } });
+  b.addEventListener('click', () => openInNewTab(socNormUrl(url)));
+  b.addEventListener('auxclick', (e) => { if (e.button === 1) { e.preventDefault(); openInNewTab(socNormUrl(url)); } });
   b.addEventListener('contextmenu', (e) => { e.preventDefault(); window.materia.copyText(socNormUrl(url)); showMini('Copied ' + s.name + ' link'); });
   return b;
 }
@@ -1137,7 +1139,7 @@ function toggleSocOverflow(list, anchor) {
     const ic = document.createElement('span'); ic.className = 'soc-ov-ic'; ic.innerHTML = socIconSVG(s, 16);
     const nm = document.createElement('span'); nm.textContent = s.name;
     row.append(ic, nm);
-    row.addEventListener('click', () => { pop.classList.remove('open'); openBookmark(socNormUrl(url), false); });
+    row.addEventListener('click', () => { pop.classList.remove('open'); openInNewTab(socNormUrl(url)); });
     row.addEventListener('contextmenu', (e) => { e.preventDefault(); window.materia.copyText(socNormUrl(url)); showMini('Copied ' + s.name + ' link'); });
     pop.appendChild(row);
   });
