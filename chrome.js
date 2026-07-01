@@ -624,7 +624,7 @@ function renderWsSwitcher() {
   const menu = $('ws-menu');
   menu.querySelectorAll('.ws-item').forEach(n => n.remove());
   workspaces.forEach(ws => {
-    const item = document.createElement('button');
+    const item = document.createElement('div');   // div, not <button>: a native button steals Space as an activation key, which torpedoes the nested rename input (space would fire the row's click → switch+close)
     item.className = 'ws-item' + (ws.id === activeWsId ? ' active' : '');
     const dot = document.createElement('span'); dot.className = 'ws-dot';
     const c = wsColor(ws.id); dot.style.background = c; dot.style.boxShadow = '0 0 6px ' + c;
