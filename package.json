@@ -1,6 +1,6 @@
 {
   "name": "materia-browser",
-  "version": "0.4.17",
+  "version": "0.4.18",
   "description": "Materia Browser — a privacy-hardened, MarrowMyth-skinned Chromium browser.",
   "author": "F.C. Marrow / MarrowMyth",
   "main": "main.js",

@@ -37,7 +37,11 @@ body{
 #nav-mm:hover img{opacity:1; filter:brightness(0) invert(1) drop-shadow(0 0 4px var(--teal))}
 #tabs{display:flex; align-items:flex-end; gap:3px; -webkit-app-region:no-drag; max-width:66vw; overflow:hidden}
 .tab{
-  display:flex; align-items:center; gap:7px; flex:0 1 178px; min-width:46px; max-width:212px; height:32px;
+  /* width:178px is a DEFINITE size (not just flex-basis) — without it, #tabs being content-sized drops the
+     tabs into max-content sizing where each collapses to its title's width, so every title/notification
+     change resized the tab ("bobbing"). The definite width pins it; flex-shrink still lets them shrink to
+     fit when many are open (down to min-width). */
+  display:flex; align-items:center; gap:7px; width:178px; flex:0 1 178px; min-width:46px; max-width:178px; height:32px;
   padding:0 9px; border-radius:8px 8px 0 0; cursor:default; position:relative;
   background:rgba(255,255,255,.018); border:1px solid transparent; border-bottom:none;
   color:var(--ink-faint); transition:background .15s,color .15s;
