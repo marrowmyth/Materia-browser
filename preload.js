@@ -71,5 +71,7 @@ contextBridge.exposeInMainWorld('materia', {
   aiPanelBounds: (d) => ipcRenderer.send('mm-ai:panel-bounds', d),
   aiPanelHide: () => ipcRenderer.send('mm-ai:panel-hide'),
   aiActiveTab: (vid) => ipcRenderer.send('mm-ai:active-vid', vid),
-  onAiBookmark: (cb) => ipcRenderer.on('mm-ai:bookmark', (e, d) => cb(d))
+  onAiBookmark: (cb) => ipcRenderer.on('mm-ai:bookmark', (e, d) => cb(d)),
+  aiSettingsGet: () => ipcRenderer.invoke('settings:get'),
+  aiSettingsSet: (patch) => ipcRenderer.invoke('settings:set', patch)
 });

@@ -113,6 +113,32 @@
       </div>
 
       <div class="set-block">
+        <p class="set-heading">AI assistant</p>
+        <p class="set-label" style="margin-bottom:6px">Default model</p>
+        <div class="ai-set-seg" id="ai-set-provider">
+          <button type="button" data-p="claude" class="ai-seg-btn">Claude</button>
+          <button type="button" data-p="gemini" class="ai-seg-btn">Gemini</button>
+          <button type="button" data-p="openai" class="ai-seg-btn">ChatGPT</button>
+        </div>
+        <p class="set-label" style="margin:14px 0 6px">Access</p>
+        <div class="ai-set-seg" id="ai-set-variant">
+          <button type="button" data-v="cli" class="ai-seg-btn">Subscription (CLI)</button>
+          <button type="button" data-v="api" class="ai-seg-btn">API key</button>
+        </div>
+        <p class="set-note" style="margin-top:6px">Subscription uses your signed-in Claude / Gemini / Codex CLI, no key needed. API key uses your own key, billed to you. The assistant can search the web, read the page, open tabs and bookmark for you (Ctrl+J).</p>
+        <div style="margin-top:14px">
+          <p class="set-label" style="margin-bottom:6px">API keys (stored encrypted on this PC)</p>
+          <input class="ai-key-input" id="ai-key-anthropic" type="password" placeholder="Anthropic API key (sk-ant-...)" autocomplete="off" spellcheck="false" />
+          <input class="ai-key-input" id="ai-key-google" type="password" placeholder="Google AI API key" autocomplete="off" spellcheck="false" />
+          <input class="ai-key-input" id="ai-key-openai" type="password" placeholder="OpenAI API key (sk-...)" autocomplete="off" spellcheck="false" />
+        </div>
+        <div class="set-row" style="margin-top:12px; align-items:center">
+          <p id="ai-set-status" class="set-note" style="margin:0"></p>
+          <button type="button" id="ai-set-save" class="set-btn">Save AI settings</button>
+        </div>
+      </div>
+
+      <div class="set-block">
         <p class="set-heading">Default browser</p>
         <div class="set-row" style="align-items:flex-start">
           <div style="flex:1; min-width:0">

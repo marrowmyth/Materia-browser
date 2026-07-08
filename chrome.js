@@ -774,7 +774,7 @@ $('ws-new-input').addEventListener('keydown', (e) => {
 
 /* ---------- settings ---------- */
 const settings = $('settings');
-$('nav-settings').addEventListener('click', () => { settings.classList.remove('hidden'); collapseAllBlocks(); renderProviderSetting(); renderAdblockStatus(); renderTrusted(); renderDefaultBrowser(); });
+$('nav-settings').addEventListener('click', () => { settings.classList.remove('hidden'); collapseAllBlocks(); renderProviderSetting(); renderAdblockStatus(); renderTrusted(); renderDefaultBrowser(); renderAiSettings(); });
 function renderDefaultBrowser() {
   const st = $('default-browser-status'); if (!st || !window.materia.defaultBrowserStatus) return;
   window.materia.defaultBrowserStatus().then(s => {
@@ -1271,7 +1271,7 @@ function palCommands() {
   out.push({ ico: '★', title: 'Bookmark this page', sub: 'Ctrl+D', run: () => toggleBookmark() });
   out.push({ ico: '/', title: 'Toggle AI assistant', sub: 'Ctrl+J', run: () => { try { toggleAi(); } catch (_) {} } });
   if (typeof toggleReader === 'function') out.push({ ico: '☷', title: 'Reader mode', sub: 'F9', run: () => toggleReader() });
-  out.push({ ico: '⚙', title: 'Settings', run: () => { settings.classList.remove('hidden'); try { collapseAllBlocks(); renderProviderSetting(); renderAdblockStatus(); renderTrusted(); renderDefaultBrowser(); } catch (_) {} } });
+  out.push({ ico: '⚙', title: 'Settings', run: () => { settings.classList.remove('hidden'); try { collapseAllBlocks(); renderProviderSetting(); renderAdblockStatus(); renderTrusted(); renderDefaultBrowser(); renderAiSettings(); } catch (_) {} } });
   out.push({ ico: '✕', title: 'Close current tab', sub: 'Ctrl+W', run: () => { if (activeId) closeTab(activeId); } });
   wsTabs().forEach(t => { if (t.id !== activeId && !isNewtab(t.url)) out.push({ ico: '▢', title: t.title || palHost(t.url), sub: palHost(t.url), run: () => activateTab(t.id) }); });
   (workspaces || []).forEach(w => { if (w.id !== activeWsId) out.push({ ico: '◧', title: 'Go to workspace: ' + w.name, run: () => switchWorkspace(w.id) }); });
@@ -1400,6 +1400,44 @@ async function toggleReader() {
   applyChrome();
 }
 { const rc = $('reader-close'); if (rc) rc.addEventListener('click', () => closeReader()); }
+
+/* ---------- AI settings block inside Materia's Settings panel (same store as the AI panel gear) ---------- */
+async function renderAiSettings() {
+  let s = null;
+  try { s = await window.materia.aiSettingsGet(); } catch (_) {}
+  if (!s) return;
+  const prov = (s.selection && s.selection.provider) || 'claude';
+  const variant = (s.selection && s.selection.variant) || 'cli';
+  document.querySelectorAll('#ai-set-provider .ai-seg-btn').forEach(b => b.classList.toggle('on', b.dataset.p === prov));
+  document.querySelectorAll('#ai-set-variant .ai-seg-btn').forEach(b => b.classList.toggle('on', b.dataset.v === variant));
+  const keys = s.apiKeys || {};
+  const put = (id, v) => { const el = $(id); if (el) el.value = v || ''; };
+  put('ai-key-anthropic', keys.anthropic); put('ai-key-google', keys.google); put('ai-key-openai', keys.openai);
+  const st = $('ai-set-status'); if (st) st.textContent = '';
+}
+(function wireAiSettings() {
+  const seg = (sel) => document.querySelectorAll(sel + ' .ai-seg-btn').forEach(b => b.addEventListener('click', () => {
+    document.querySelectorAll(sel + ' .ai-seg-btn').forEach(x => x.classList.remove('on')); b.classList.add('on');
+  }));
+  seg('#ai-set-provider'); seg('#ai-set-variant');
+  const save = $('ai-set-save');
+  if (save) save.addEventListener('click', async () => {
+    const provBtn = document.querySelector('#ai-set-provider .ai-seg-btn.on');
+    const varBtn = document.querySelector('#ai-set-variant .ai-seg-btn.on');
+    const patch = {
+      selection: { provider: (provBtn && provBtn.dataset.p) || 'claude', variant: (varBtn && varBtn.dataset.v) || 'cli' },
+      apiKeys: {
+        anthropic: (($('ai-key-anthropic') || {}).value || '').trim(),
+        google: (($('ai-key-google') || {}).value || '').trim(),
+        openai: (($('ai-key-openai') || {}).value || '').trim(),
+      },
+    };
+    const st = $('ai-set-status');
+    try { await window.materia.aiSettingsSet(patch); if (st) st.textContent = '✓ Saved'; }
+    catch (_) { if (st) st.textContent = 'Could not save'; }
+    setTimeout(() => { if (st) st.textContent = ''; }, 2500);
+  });
+})();
 
 window.addEventListener('keydown', (e) => {
   const ctrl = e.ctrlKey || e.metaKey; const k = e.key;

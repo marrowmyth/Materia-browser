@@ -479,3 +479,11 @@ body.fullscreen #titlebar, body.fullscreen #toolbar, body.fullscreen #bookmarks,
 .reader-body .rd-li{ position:relative; margin:0 0 10px 22px }
 .reader-body .rd-li::before{ content:'•'; color:#f1cb53; position:absolute; left:-18px }
 .reader-body .rd-img{ display:block; max-width:100%; height:auto; border-radius:8px; margin:8px 0 24px }
+
+/* AI assistant settings block (Materia Settings panel), Slash-yellow selection */
+.ai-set-seg{ display:flex; gap:6px; flex-wrap:wrap }
+.ai-seg-btn{ padding:7px 13px; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--ink-dim); cursor:pointer; font-family:var(--ui); font-size:12.5px }
+.ai-seg-btn:hover{ color:var(--ink) }
+.ai-seg-btn.on{ background:rgba(241,203,83,.16); border-color:rgba(241,203,83,.5); color:#f1cb53 }
+.ai-key-input{ display:block; width:100%; margin-bottom:8px; padding:8px 11px; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--ink); font-family:var(--ui); font-size:12.5px; outline:none }
+.ai-key-input:focus{ border-color:rgba(241,203,83,.5) }
