@@ -1,6 +1,7 @@
-/* Slash theme. Near-black chrome, soft yellow accent (themeable), system
-   font for UI, Space Grotesk for the /slash logo. Token names are stable;
-   the accent is overridden at runtime from settings. */
+/* AI-surface theme for Materia. Neutral palette borrowed from Materia's own
+   chrome (dark teal-black) so the assistant reads as native Materia; the brand
+   accent stays Slash yellow. Token names are stable; the accent is overridden
+   at runtime from settings. */
 
 @font-face {
   font-family: 'Grotesk';
@@ -16,33 +17,35 @@
 }
 
 :root {
-  --titlebar: #141416;
-  --paper: #1c1c1f;
-  --raised: #2a2a2e;
-  --raised-2: #34343a;
-  --field: #2a2a2e;
-  --ink: #e8e8ec;
-  --muted: #9a9aa3;
-  --faint: #6a6a72;
-  --border: rgba(255, 255, 255, 0.08);
-  --border-strong: rgba(255, 255, 255, 0.14);
+  /* Neutrals lifted from Materia's chrome (dark teal-black) so the AI surfaces
+     match the rest of the browser. */
+  --titlebar: #050f12;
+  --paper: #061215;
+  --raised: #0a1f24;
+  --raised-2: #0e2a30;
+  --field: #081b20;
+  --ink: #dae7ec;
+  --muted: #9fb3b7;
+  --faint: #5e8082;
+  --border: rgba(92, 148, 147, 0.14);
+  --border-strong: rgba(92, 148, 147, 0.26);
 
-  /* Soft yellow (themeable; overridden at runtime from settings) */
+  /* Slash yellow, our brand accent (themeable; overridden at runtime). */
   --accent: #f1cb53;
   --accent-hover: #e0b63d;
   --accent-soft: rgba(241, 203, 83, 0.16);
-  --on-accent: #18181b;
+  --on-accent: #08181c;
 
   /* Functional status color for security warnings (not a second brand accent) */
   --warn: #e0a23d;
 
   --radius: 8px;
   --radius-sm: 6px;
-  --radius-lg: 12px;
+  --radius-lg: 10px;
 
-  --font-sans: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-sans: 'Segoe UI', system-ui, -apple-system, Roboto, Arial, sans-serif;
   --font-brand: 'Grotesk', 'Segoe UI', system-ui, sans-serif;
-  --font-mono: ui-monospace, 'Cascadia Code', 'Consolas', monospace;
+  --font-mono: 'Cascadia Mono', 'Cascadia Code', 'Consolas', monospace;
 }
 
 * {
