@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' https: data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; frame-src 'none'" />
+    <title>Command palette</title>
+    <link rel="stylesheet" href="theme.css" />
+    <link rel="stylesheet" href="palette.css" />
+  </head>
+  <body>
+    <div id="palette">
+      <div class="pal-input-row">
+        <span class="pal-slash" aria-hidden="true">/</span>
+        <input
+          id="pal-input"
+          type="text"
+          placeholder="Search tabs and history, run a command, or type / to ask AI"
+          spellcheck="false"
+          autocomplete="off"
+          role="combobox"
+          aria-expanded="true"
+          aria-controls="pal-results"
+          aria-label="Command palette"
+        />
+      </div>
+      <div id="pal-results" role="listbox" aria-label="Palette results"></div>
+    </div>
+    <script src="palette.js"></script>
+  </body>
+</html>

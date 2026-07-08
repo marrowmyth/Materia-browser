@@ -14,14 +14,25 @@
     "appId": "com.marrowmyth.materiabrowser",
     "productName": "Materia Browser",
     "copyright": "(c) 2026 MarrowMyth",
-    "directories": { "output": "dist", "buildResources": "build" },
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
     "files": [
-      "main.js", "preload.js", "mm-nt-preload.js",
-      "chrome.js", "chrome.css", "index.html", "newtab.html",
-      "socials-data.js", "assets/**/*"
+      "main.js",
+      "preload.js",
+      "mm-nt-preload.js",
+      "chrome.js",
+      "chrome.css",
+      "index.html",
+      "newtab.html",
+      "socials-data.js",
+      "assets/**/*"
     ],
     "win": {
-      "target": ["nsis"],
+      "target": [
+        "nsis"
+      ],
       "icon": "build/icon.png",
       "artifactName": "Materia-Browser-Setup-${version}.${ext}"
     },
@@ -45,6 +56,8 @@
     "electron-builder": "^26.15.3"
   },
   "dependencies": {
-    "@ghostery/adblocker-electron": "^2.18.0"
+    "@ghostery/adblocker-electron": "^2.18.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@pythonluvr/squire": "^1.3.0"
   }
 }

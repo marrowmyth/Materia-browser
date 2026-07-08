@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src https: data:; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; frame-src 'none'; connect-src 'none'" />
+    <title>Reader</title>
+    <link rel="stylesheet" href="theme.css" />
+    <link rel="stylesheet" href="reader.css" />
+  </head>
+  <body>
+    <div id="reader">
+      <div class="rd-bar">
+        <span class="rd-slash" aria-hidden="true">/</span>
+        <span class="rd-label">reader</span>
+        <span class="rd-spacer"></span>
+        <button id="rd-close" type="button" aria-label="Close reader (Esc)" title="Close reader (Esc)">Close</button>
+      </div>
+      <article id="rd-article">
+        <h1 id="rd-title"></h1>
+        <div id="rd-byline"></div>
+        <div id="rd-content"></div>
+      </article>
+    </div>
+    <script src="reader.js"></script>
+  </body>
+</html>

@@ -1,0 +1,131 @@
+* {
+  box-sizing: border-box;
+}
+/* Use the bundled IBM Plex Serif for the title and headings (adds a reading
+   character; body stays on a robust system serif so nothing depends on a load). */
+@font-face {
+  font-family: 'Plex Serif';
+  src: url('fonts/ibm-plex-serif-600.woff2') format('woff2');
+  font-weight: 600;
+  font-display: swap;
+}
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--paper);
+  color: var(--ink);
+}
+#reader {
+  height: 100%;
+  overflow-y: auto;
+}
+.rd-bar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--paper);
+  border-bottom: 1px solid var(--border);
+}
+.rd-slash {
+  color: var(--accent);
+  font-family: var(--font-grotesk, sans-serif);
+  font-weight: 700;
+}
+.rd-label {
+  color: var(--muted);
+  font-size: 12.5px;
+  letter-spacing: 0.02em;
+}
+.rd-spacer {
+  flex: 1;
+}
+#rd-close {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: var(--radius);
+  padding: 6px 12px;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+#rd-close:hover {
+  color: var(--ink);
+  border-color: var(--border-strong);
+}
+#rd-article {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 44px 28px 120px;
+}
+#rd-title {
+  font-family: 'Plex Serif', Georgia, serif;
+  font-weight: 600;
+  font-size: 30px;
+  line-height: 1.25;
+  margin: 0 0 10px;
+}
+#rd-byline {
+  color: var(--muted);
+  font-size: 13px;
+  margin-bottom: 30px;
+}
+#rd-byline:empty {
+  display: none;
+}
+#rd-content {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 18px;
+  line-height: 1.75;
+}
+#rd-content p {
+  margin: 0 0 22px;
+}
+#rd-content h2,
+#rd-content h3,
+#rd-content h4 {
+  font-family: 'Plex Serif', Georgia, serif;
+  line-height: 1.3;
+  margin: 34px 0 12px;
+}
+#rd-content h2 {
+  font-size: 22px;
+}
+#rd-content h3 {
+  font-size: 19px;
+}
+#rd-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius);
+  margin: 8px 0 24px;
+  display: block;
+}
+#rd-content blockquote {
+  margin: 0 0 22px;
+  padding-left: 18px;
+  border-left: 3px solid var(--accent);
+  color: var(--muted);
+}
+#rd-content ul {
+  margin: 0 0 22px;
+  padding-left: 22px;
+}
+#rd-content li {
+  margin-bottom: 8px;
+}
+#rd-content pre {
+  background: var(--raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  overflow-x: auto;
+  font-family: var(--font-mono, monospace);
+  font-size: 13.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}

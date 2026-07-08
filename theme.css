@@ -1,0 +1,156 @@
+/* Slash theme. Near-black chrome, soft yellow accent (themeable), system
+   font for UI, Space Grotesk for the /slash logo. Token names are stable;
+   the accent is overridden at runtime from settings. */
+
+@font-face {
+  font-family: 'Grotesk';
+  src: url('fonts/space-grotesk-500.woff2') format('woff2');
+  font-weight: 500;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Grotesk';
+  src: url('fonts/space-grotesk-700.woff2') format('woff2');
+  font-weight: 700;
+  font-display: swap;
+}
+
+:root {
+  --titlebar: #141416;
+  --paper: #1c1c1f;
+  --raised: #2a2a2e;
+  --raised-2: #34343a;
+  --field: #2a2a2e;
+  --ink: #e8e8ec;
+  --muted: #9a9aa3;
+  --faint: #6a6a72;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.14);
+
+  /* Soft yellow (themeable; overridden at runtime from settings) */
+  --accent: #f1cb53;
+  --accent-hover: #e0b63d;
+  --accent-soft: rgba(241, 203, 83, 0.16);
+  --on-accent: #18181b;
+
+  /* Functional status color for security warnings (not a second brand accent) */
+  --warn: #e0a23d;
+
+  --radius: 8px;
+  --radius-sm: 6px;
+  --radius-lg: 12px;
+
+  --font-sans: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-brand: 'Grotesk', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: ui-monospace, 'Cascadia Code', 'Consolas', monospace;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--paper);
+  color: var(--ink);
+  user-select: none;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* Thinking indicator: three bouncing dots while the AI composes a reply. */
+.dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 1em;
+  vertical-align: middle;
+}
+
+.dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--muted);
+  animation: dot-bounce 1.1s infinite ease-in-out both;
+}
+
+.dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.dots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes dot-bounce {
+  0%,
+  70%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+  35% {
+    transform: translateY(-5px);
+    opacity: 1;
+  }
+}
+
+/* Skeleton placeholders: shown while an async list (import sources, the
+   password vault, extensions) is still loading, replaced in place once the
+   data arrives. A single sweep of light reads as "working", not "broken".
+   The global reduced-motion rule above already slows the sweep; the override
+   below removes it outright so the block sits still as a quiet placeholder. */
+.skel {
+  position: relative;
+  overflow: hidden;
+  background: var(--raised-2);
+  border-radius: var(--radius-sm);
+}
+.skel::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.07) 50%, transparent 100%);
+  animation: skel-sweep 1.3s ease-in-out infinite;
+}
+.skel-line {
+  height: 10px;
+}
+@keyframes skel-sweep {
+  to {
+    transform: translateX(100%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skel::after {
+    display: none;
+  }
+}
