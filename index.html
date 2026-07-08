@@ -65,6 +65,13 @@
     <button id="find-close" class="find-btn" title="Close (Esc)">&#x2715;</button>
   </div>
 
+  <div id="palette" class="palette hidden" role="dialog" aria-modal="true" aria-label="Command palette">
+    <div class="pal-box">
+      <input id="pal-input" type="text" placeholder="Search tabs, run a command, or ask AI…" spellcheck="false" autocomplete="off" aria-label="Command palette search" />
+      <div id="pal-list" class="pal-list" role="listbox"></div>
+    </div>
+  </div>
+
   <div id="views"></div>
   <div id="dl-footer" class="dl-footer hidden"></div>
 

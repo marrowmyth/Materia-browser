@@ -287,7 +287,7 @@ function renderTabs() {
 function isEditable(t) { return !!(t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)); }
 function anyOverlayOpen() {
   const shown = (id) => { const e = $(id); return !!(e && !e.classList.contains('hidden')); };
-  if (shown('settings') || shown('notes-panel') || shown('list-panel') || shown('findbar') || shown('ws-menu')) return true;
+  if (shown('settings') || shown('notes-panel') || shown('list-panel') || shown('findbar') || shown('ws-menu') || shown('palette')) return true;
   if (document.querySelector('.omni-suggest.open, .folder-pop.open, .soc-overflow.open, #ctx-menu, .confirm-ov')) return true;
   if (isEditable(document.activeElement)) return true;   // a chrome field (address bar, settings) is focused — chrome must be the top, focusable layer
   return false;
@@ -1258,6 +1258,70 @@ function handleShortcut(cmd) {
   else if (cmd === 'bookmark') toggleBookmark();
   else if (cmd === 'print') { const t = activeTab(); if (t && !isNewtab(t.url)) { try { t.view.print(); } catch (_) {} } }
 }
+
+/* ---------- command palette (Ctrl+K): a native overlay over Materia's own commands ---------- */
+const palEl = $('palette'), palInput = $('pal-input'), palList = $('pal-list');
+let palItems = [], palSel = 0;
+function isPalOpen() { return !!(palEl && !palEl.classList.contains('hidden')); }
+function palHost(url) { try { return new URL(url).hostname.replace(/^www\./, ''); } catch (_) { return url || ''; } }
+function palCommands() {
+  const out = [];
+  out.push({ ico: '+', title: 'New tab', sub: 'Ctrl+T', run: () => createTab() });
+  out.push({ ico: '↻', title: 'Reload page', sub: 'Ctrl+R', run: () => { const t = activeTab(); if (t) t.view.reload(); } });
+  out.push({ ico: '★', title: 'Bookmark this page', sub: 'Ctrl+D', run: () => toggleBookmark() });
+  out.push({ ico: '/', title: 'Toggle AI assistant', sub: 'Ctrl+J', run: () => { try { toggleAi(); } catch (_) {} } });
+  if (typeof toggleReader === 'function') out.push({ ico: '☷', title: 'Reader mode', sub: 'F9', run: () => toggleReader() });
+  out.push({ ico: '⚙', title: 'Settings', run: () => { settings.classList.remove('hidden'); try { collapseAllBlocks(); renderProviderSetting(); renderAdblockStatus(); renderTrusted(); renderDefaultBrowser(); } catch (_) {} } });
+  out.push({ ico: '✕', title: 'Close current tab', sub: 'Ctrl+W', run: () => { if (activeId) closeTab(activeId); } });
+  wsTabs().forEach(t => { if (t.id !== activeId && !isNewtab(t.url)) out.push({ ico: '▢', title: t.title || palHost(t.url), sub: palHost(t.url), run: () => activateTab(t.id) }); });
+  (workspaces || []).forEach(w => { if (w.id !== activeWsId) out.push({ ico: '◧', title: 'Go to workspace: ' + w.name, run: () => switchWorkspace(w.id) }); });
+  (wsBookmarks() || []).forEach(b => { if (b && !b.folder) out.push({ ico: '★', title: b.title || b.url, sub: palHost(b.url), run: () => openInNewTab(b.url) }); });
+  return out;
+}
+function palFilter(q) {
+  q = (q || '').trim();
+  let items = palCommands();
+  if (q) {
+    const lq = q.toLowerCase();
+    items = items.filter(c => ((c.title || '') + ' ' + (c.sub || '')).toLowerCase().indexOf(lq) !== -1);
+    if (/^https?:\/\/|^[\w-]+(\.[\w-]+)+(\/|$)/i.test(q)) items.push({ ico: '↗', title: 'Open ' + q, run: () => { let u = q; if (!/^https?:\/\//i.test(u)) u = 'https://' + u; createTab(u); } });
+    items.push({ ico: '⌕', title: 'Search the web for "' + q + '"', run: () => { const u = resolveQuery(q); if (u) createTab(u); } });
+  }
+  return items;
+}
+function renderPal() {
+  palList.innerHTML = '';
+  if (!palItems.length) { const e = document.createElement('div'); e.className = 'pal-empty'; e.textContent = 'No matches'; palList.appendChild(e); return; }
+  palItems.forEach((c, i) => {
+    const el = document.createElement('div'); el.className = 'pal-item' + (i === palSel ? ' sel' : ''); el.setAttribute('role', 'option');
+    const ico = document.createElement('span'); ico.className = 'pal-ico'; ico.textContent = c.ico || ''; el.appendChild(ico);
+    const ti = document.createElement('span'); ti.className = 'pal-title'; ti.textContent = c.title; el.appendChild(ti);
+    if (c.sub) { const s = document.createElement('span'); s.className = 'pal-sub'; s.textContent = c.sub; el.appendChild(s); }
+    el.addEventListener('mousemove', () => { if (palSel !== i) { palSel = i; syncPalSel(); } });
+    el.addEventListener('click', () => runPal(i));
+    palList.appendChild(el);
+  });
+  const sel = palList.children[palSel]; if (sel && sel.scrollIntoView) sel.scrollIntoView({ block: 'nearest' });
+}
+function syncPalSel() { Array.from(palList.children).forEach((el, i) => el.classList.toggle('sel', i === palSel)); }
+function openPalette() {
+  if (!palEl) return;
+  palEl.classList.remove('hidden'); palInput.value = ''; palItems = palFilter(''); palSel = 0; renderPal(); applyChrome();
+  setTimeout(() => { try { palInput.focus(); } catch (_) {} try { window.materia.focusChrome(); } catch (_) {} }, 0);
+}
+function closePalette() { if (!palEl) return; palEl.classList.add('hidden'); applyChrome(); }
+function runPal(i) { const c = palItems[i]; closePalette(); if (c && c.run) try { c.run(); } catch (_) {} }
+if (palInput) {
+  palInput.addEventListener('input', () => { palItems = palFilter(palInput.value); palSel = 0; renderPal(); });
+  palInput.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); palSel = Math.min(palSel + 1, palItems.length - 1); renderPal(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); palSel = Math.max(palSel - 1, 0); renderPal(); }
+    else if (e.key === 'Enter') { e.preventDefault(); runPal(palSel); }
+    else if (e.key === 'Escape') { e.preventDefault(); closePalette(); }
+  });
+}
+if (palEl) palEl.addEventListener('mousedown', (e) => { if (e.target === palEl) closePalette(); });
+
 window.addEventListener('keydown', (e) => {
   const ctrl = e.ctrlKey || e.metaKey; const k = e.key;
   if (k === 'F11') { e.preventDefault(); handleShortcut('fullscreen'); }
@@ -1269,6 +1333,7 @@ window.addEventListener('keydown', (e) => {
   else if (ctrl && k.toLowerCase() === 'l') { e.preventDefault(); handleShortcut('focusomni'); }
   else if (ctrl && k.toLowerCase() === 'r') { e.preventDefault(); handleShortcut('reload'); }
   else if (ctrl && k.toLowerCase() === 'f') { e.preventDefault(); handleShortcut('find'); }
+  else if (ctrl && k.toLowerCase() === 'k') { e.preventDefault(); isPalOpen() ? closePalette() : openPalette(); }
   else if (ctrl && k.toLowerCase() === 'd') { e.preventDefault(); handleShortcut('bookmark'); }
   else if (ctrl && k.toLowerCase() === 'p') { e.preventDefault(); handleShortcut('print'); }
   else if (ctrl && (k === '=' || k === '+')) { e.preventDefault(); handleShortcut('zoomin'); }
