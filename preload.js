@@ -65,5 +65,9 @@ contextBridge.exposeInMainWorld('materia', {
   tabMoveOut: (d) => ipcRenderer.send('tab-move-out', d),
   viewAdopt: (d) => ipcRenderer.send('view-adopt', d),
   onAdoptTab: (cb) => ipcRenderer.on('adopt-tab', (e, d) => cb(d)),
-  onViewEvent: (cb) => ipcRenderer.on('view-event', (e, d) => cb(d))
+  onViewEvent: (cb) => ipcRenderer.on('view-event', (e, d) => cb(d)),
+  // AI panel (docked assistant)
+  aiToggle: (force) => ipcRenderer.invoke('mm-ai:toggle', force),
+  aiPanelBounds: (d) => ipcRenderer.send('mm-ai:panel-bounds', d),
+  aiPanelHide: () => ipcRenderer.send('mm-ai:panel-hide')
 });

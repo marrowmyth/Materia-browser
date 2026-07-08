@@ -32,6 +32,16 @@ function injectAIPrefill(view, query) { try { view.executeJavaScript(aiPrefillJS
 const $ = (id) => document.getElementById(id);
 const viewsEl = $('views');
 const tabsEl = $('tabs');
+
+// AI assistant: a docked panel on the right. layoutViews() reserves its width.
+const AI_PANEL_WIDTH = 400;
+let aiOpen = false;
+async function toggleAi(force) {
+  try { aiOpen = await window.materia.aiToggle(force); } catch (_) { aiOpen = false; }
+  const b = $('nav-ai'); if (b) b.classList.toggle('active', aiOpen);
+  try { layoutViews(); } catch (_) {}
+}
+try { const b = $('nav-ai'); if (b) b.addEventListener('click', () => toggleAi()); } catch (_) {}
 const omni = $('omnibox');
 // focusing the address bar must also pull OS keyboard focus to the chrome view (else it sits on the page view)
 function focusOmni() { try { omni.focus(); } catch (_) {} try { window.materia.focusChrome(); } catch (_) {} }
@@ -304,7 +314,10 @@ function layoutViews() {
   if (splitId && !tabs.some(t => t.id === splitId && t.wsId === activeWsId && t.id !== activeId)) splitId = null;
   const on = !!splitId;
   const r = viewsEl.getBoundingClientRect();
-  const X = r.left, Y = r.top, W = r.width, H = r.height, halfW = Math.round(W / 2);
+  const X = r.left, Y = r.top, H = r.height;
+  const aiW = aiOpen ? Math.min(AI_PANEL_WIDTH, Math.floor(r.width * 0.5)) : 0;
+  const W = r.width - aiW; // shrink the content area when the AI panel is docked
+  const halfW = Math.round(W / 2);
   tabs.forEach(t => {
     const left = t.id === activeId, right = on && t.id === splitId;
     if (on && left) window.materia.viewBounds({ vid: t.id, x: X, y: Y, width: halfW, height: H });
@@ -312,6 +325,8 @@ function layoutViews() {
     else if (!on && left) window.materia.viewBounds({ vid: t.id, x: X, y: Y, width: W, height: H });
     else window.materia.viewHide({ vid: t.id });
   });
+  if (aiW) window.materia.aiPanelBounds({ x: X + W, y: Y, width: aiW, height: H });
+  else window.materia.aiPanelHide();
   applyChrome();
 }
 window.addEventListener('resize', () => { try { layoutViews(); } catch (_) {} });
@@ -1227,6 +1242,7 @@ function handleShortcut(cmd) {
   else if (cmd === 'focusomni') focusOmni();
   else if (cmd === 'reload') { const t = activeTab(); if (t) t.view.reload(); }
   else if (cmd === 'find') showFind();
+  else if (cmd === 'ai') toggleAi();
   else if (cmd === 'reopentab') reopenClosed();
   else if (cmd === 'fullscreen') { try { window.materia.toggleFullscreen(); } catch (_) {} }
   else if (cmd === 'nexttab') cycleTab();

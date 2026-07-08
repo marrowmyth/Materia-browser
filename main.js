@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const { pathToFileURL } = require('url');
 const { spawn, spawnSync, execFile } = require('child_process');
+const mmAi = require('./mm-ai'); // AI subsystem (docked panel + engine)
 
 // Log uncaught main-process errors to a file instead of popping Electron's default
 // "A JavaScript error occurred in the main process" dialog at the user. The app keeps running.
@@ -417,6 +418,7 @@ async function checkForUpdate() {
 }
 app.whenReady().then(() => {
   if (!gotLock) return;   // 2nd instance (lock not acquired): never open a window — prevents the flash+close crash when opening a file while already running
+  try { mmAi.init(); } catch (_) {}   // register AI IPC (panel + engine)
   // "VPN-grade" baseline: encrypted DNS so your ISP can't see your lookups.
   try {
     app.configureHostResolver({
@@ -599,7 +601,7 @@ function wireGuest(wc, ownerWin) {
     else if (ctrl && input.shift && k.toLowerCase() === 't') cmd = 'reopentab';
     else if (ctrl && k === 'Tab') cmd = 'nexttab';
     else if (ctrl && /^[1-9]$/.test(k)) cmd = 'tab' + k;
-    else if (ctrl) { const m = { t: 'newtab', w: 'closetab', l: 'focusomni', r: 'reload', f: 'find', d: 'bookmark', p: 'print', '=': 'zoomin', '+': 'zoomin', '-': 'zoomout', '0': 'zoomreset' }; cmd = m[k.toLowerCase()]; }
+    else if (ctrl) { const m = { t: 'newtab', w: 'closetab', l: 'focusomni', r: 'reload', f: 'find', d: 'bookmark', p: 'print', j: 'ai', '=': 'zoomin', '+': 'zoomin', '-': 'zoomout', '0': 'zoomreset' }; cmd = m[k.toLowerCase()]; }
     if (cmd) { event.preventDefault(); const ow = owner(); if (ow) csend(ow, 'shortcut', cmd); }
   });
   wc.on('zoom-changed', (e3, dir) => { const ow = owner(); if (ow) csend(ow, 'zoom-wheel', dir); });
