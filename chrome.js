@@ -287,7 +287,7 @@ function renderTabs() {
 function isEditable(t) { return !!(t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)); }
 function anyOverlayOpen() {
   const shown = (id) => { const e = $(id); return !!(e && !e.classList.contains('hidden')); };
-  if (shown('settings') || shown('notes-panel') || shown('list-panel') || shown('findbar') || shown('ws-menu') || shown('palette')) return true;
+  if (shown('settings') || shown('notes-panel') || shown('list-panel') || shown('findbar') || shown('ws-menu') || shown('palette') || shown('reader')) return true;
   if (document.querySelector('.omni-suggest.open, .folder-pop.open, .soc-overflow.open, #ctx-menu, .confirm-ov')) return true;
   if (isEditable(document.activeElement)) return true;   // a chrome field (address bar, settings) is focused — chrome must be the top, focusable layer
   return false;
@@ -1322,9 +1322,89 @@ if (palInput) {
 }
 if (palEl) palEl.addEventListener('mousedown', (e) => { if (e.target === palEl) closePalette(); });
 
+/* ---------- reader mode (F9): extract the article as SAFE STRUCTURED TEXT (never page HTML) ---------- */
+const READER_EXTRACT_JS = `(() => {
+  try {
+    const doc = document;
+    const metaTitle = doc.querySelector('meta[property="og:title"]');
+    const title = (metaTitle && metaTitle.content) || doc.title || '';
+    const scoreOf = (el) => {
+      let s = 0;
+      el.querySelectorAll('p').forEach((p) => { const len = ((p.innerText) || '').trim().length; if (len > 25) s += Math.min(3, len / 100) + 1; });
+      return s;
+    };
+    let best = null, bestScore = 0;
+    const cands = [].slice.call(doc.querySelectorAll('article, main, [role=main], .post, .article, .entry-content, .post-content, #content, .content'));
+    for (const el of cands) { const s = scoreOf(el); if (s > bestScore) { bestScore = s; best = el; } }
+    if (!best || bestScore < 3) { const all = [].slice.call(doc.querySelectorAll('div, section')); for (const el of all) { const s = scoreOf(el); if (s > bestScore) { bestScore = s; best = el; } } }
+    if (!best) best = doc.body;
+    const SKIP = /^(nav|aside|footer|header|form|button|script|style|noscript|svg|iframe|figcaption)$/i;
+    const blocks = [];
+    const pushText = (t, txt) => { txt = (txt || '').replace(/\\s+/g, ' ').trim(); if (txt) blocks.push({ t: t, text: txt }); };
+    const walk = (el, depth) => {
+      if (depth > 12) return;
+      for (const node of el.children) {
+        const tag = node.tagName.toLowerCase();
+        if (SKIP.test(tag)) continue;
+        let cs; try { cs = getComputedStyle(node); } catch (e) { cs = null; }
+        if (cs && (cs.display === 'none' || cs.visibility === 'hidden')) continue;
+        if (/^h[1-6]$/.test(tag)) pushText(tag, node.innerText);
+        else if (tag === 'p') pushText('p', node.innerText);
+        else if (tag === 'blockquote') pushText('quote', node.innerText);
+        else if (tag === 'pre') { const t = node.innerText; if (t && t.trim()) blocks.push({ t: 'pre', text: t }); }
+        else if (tag === 'ul' || tag === 'ol') { for (const li of node.querySelectorAll(':scope > li')) pushText('li', li.innerText); }
+        else if (tag === 'img' || tag === 'figure') { const img = tag === 'img' ? node : node.querySelector('img'); const src = img && (img.currentSrc || img.src); if (src && /^https:/i.test(src) && ((img.naturalWidth || 300) > 200)) blocks.push({ t: 'img', src: src }); }
+        else if (node.children.length) walk(node, depth + 1);
+        else pushText('p', node.innerText);
+      }
+    };
+    walk(best, 0);
+    const out = [];
+    for (const b of blocks) { if (out.length && out[out.length - 1].text && out[out.length - 1].text === b.text) continue; out.push(b); if (out.length > 400) break; }
+    if (out.filter((b) => b.t === 'p').length < 2) return null;
+    const authorMeta = doc.querySelector('meta[name=author]');
+    const byline = (authorMeta && authorMeta.content) || '';
+    return { title: title, byline: (byline || '').trim().slice(0, 120), url: location.href, blocks: out };
+  } catch (e) { return null; }
+})()`;
+function isReaderOpen() { const r = $('reader'); return !!(r && !r.classList.contains('hidden')); }
+function closeReader() { const r = $('reader'); if (r) r.classList.add('hidden'); applyChrome(); }
+function renderReader(article) {
+  const body = $('reader-body'); if (!body) return;
+  body.innerHTML = '';
+  const h = document.createElement('h1'); h.className = 'rd-title'; h.textContent = article.title || 'Reader'; body.appendChild(h);
+  if (article.byline) { const by = document.createElement('div'); by.className = 'rd-byline'; by.textContent = article.byline; body.appendChild(by); }
+  if (article.url) { const s = document.createElement('div'); s.className = 'rd-src'; s.textContent = palHost(article.url); body.appendChild(s); }
+  (article.blocks || []).forEach((b) => {
+    if (b.t === 'img') { if (b.src) { const im = document.createElement('img'); im.className = 'rd-img'; im.loading = 'lazy'; im.referrerPolicy = 'no-referrer'; im.src = b.src; body.appendChild(im); } return; }
+    let el;
+    if (/^h[1-6]$/.test(b.t)) el = document.createElement(b.t);
+    else if (b.t === 'quote') el = document.createElement('blockquote');
+    else if (b.t === 'pre') el = document.createElement('pre');
+    else if (b.t === 'li') { el = document.createElement('div'); el.className = 'rd-li'; }
+    else el = document.createElement('p');
+    el.textContent = b.text || '';
+    body.appendChild(el);
+  });
+}
+async function toggleReader() {
+  if (isReaderOpen()) return closeReader();
+  const t = activeTab();
+  if (!t || isNewtab(t.url)) { showMini('Open a page to read it'); return; }
+  let article = null;
+  try { article = await t.view.executeJavaScript(READER_EXTRACT_JS, true); } catch (_) {}
+  if (!article || !article.blocks || !article.blocks.length) { showMini('No readable article found'); return; }
+  renderReader(article);
+  const r = $('reader'); if (r) r.classList.remove('hidden');
+  const sc = $('reader-scroll'); if (sc) sc.scrollTop = 0;
+  applyChrome();
+}
+{ const rc = $('reader-close'); if (rc) rc.addEventListener('click', () => closeReader()); }
+
 window.addEventListener('keydown', (e) => {
   const ctrl = e.ctrlKey || e.metaKey; const k = e.key;
   if (k === 'F11') { e.preventDefault(); handleShortcut('fullscreen'); }
+  else if (k === 'F9') { e.preventDefault(); toggleReader(); }
   else if (ctrl && e.shiftKey && k.toLowerCase() === 't') { e.preventDefault(); handleShortcut('reopentab'); }
   else if (ctrl && k === 'Tab') { e.preventDefault(); handleShortcut('nexttab'); }
   else if (ctrl && /^[1-9]$/.test(k)) { e.preventDefault(); handleShortcut('tab' + k); }
@@ -1339,6 +1419,7 @@ window.addEventListener('keydown', (e) => {
   else if (ctrl && (k === '=' || k === '+')) { e.preventDefault(); handleShortcut('zoomin'); }
   else if (ctrl && k === '-') { e.preventDefault(); handleShortcut('zoomout'); }
   else if (ctrl && k === '0') { e.preventDefault(); handleShortcut('zoomreset'); }
+  else if (k === 'Escape' && isReaderOpen()) { e.preventDefault(); closeReader(); }
   else if (k === 'Escape') { closeCtxMenu(); if (document.body.classList.contains('fullscreen')) { try { window.materia.toggleFullscreen(); } catch (_) {} } else if ($('findbar') && !$('findbar').classList.contains('hidden')) hideFind(); else { settings.classList.add('hidden'); if ($('list-panel')) $('list-panel').classList.add('hidden'); if ($('notes-panel')) $('notes-panel').classList.add('hidden'); } }
 });
 window.materia.onShortcut(handleShortcut);
