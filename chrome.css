@@ -487,3 +487,7 @@ body.fullscreen #titlebar, body.fullscreen #toolbar, body.fullscreen #bookmarks,
 .ai-seg-btn.on{ background:rgba(241,203,83,.16); border-color:rgba(241,203,83,.5); color:#f1cb53 }
 .ai-key-input{ display:block; width:100%; margin-bottom:8px; padding:8px 11px; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--ink); font-family:var(--ui); font-size:12.5px; outline:none }
 .ai-key-input:focus{ border-color:rgba(241,203,83,.5) }
+
+/* when the AI panel is docked, full-window overlays reserve the dock width so they
+   sit in the page area instead of colliding with the panel (--mm-ai-dock set by layoutViews) */
+.panel, #reader, #palette{ right:var(--mm-ai-dock, 0px) }

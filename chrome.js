@@ -328,6 +328,7 @@ function layoutViews() {
   if (aiW) window.materia.aiPanelBounds({ x: X + W, y: Y, width: aiW, height: H });
   else window.materia.aiPanelHide();
   try { window.materia.aiActiveTab(activeId); } catch (_) {}   // keep main's active-tab pointer in sync for the AI
+  try { document.documentElement.style.setProperty('--mm-ai-dock', aiW + 'px'); } catch (_) {}   // overlays reserve the dock
   applyChrome();
 }
 window.addEventListener('resize', () => { try { layoutViews(); } catch (_) {} });
