@@ -418,7 +418,21 @@ async function checkForUpdate() {
 }
 app.whenReady().then(() => {
   if (!gotLock) return;   // 2nd instance (lock not acquired): never open a window — prevents the flash+close crash when opening a file while already running
-  try { mmAi.init(); } catch (_) {}   // register AI IPC (panel + engine)
+  try {
+    mmAi.init({
+      // the chrome renderer for a window (AI tools send it open-tab / bookmark)
+      chromeWC: (win) => { try { const cv = chromeViews.get(win); return cv && !cv.webContents.isDestroyed() ? cv.webContents : null; } catch (_) { return null; } },
+      // the active tab's page webContents (AI reads it for read_current_page)
+      activeGuestWC: (win) => {
+        try {
+          const cv = chromeViews.get(win); if (!cv || cv.webContents.isDestroyed()) return null;
+          const vid = mmAiActiveVid.get(cv.webContents.id); if (vid == null) return null;
+          const gv = guestViews.get(gKey(cv.webContents.id, vid));
+          return gv && !gv.webContents.isDestroyed() ? gv.webContents : null;
+        } catch (_) { return null; }
+      },
+    });
+  } catch (_) {}   // register AI IPC (panel + engine + browser tools)
   // "VPN-grade" baseline: encrypted DNS so your ISP can't see your lookups.
   try {
     app.configureHostResolver({
@@ -613,6 +627,8 @@ const viewMeta = new Map();     // page-view wc id -> { win, vid }  (kept curren
 const limbo = new Map();        // xfer id -> detached WebContentsView, alive and awaiting adoption by another window
 function gKey(chromeWcId, vid) { return chromeWcId + ':' + vid; }
 function gResolve(e, vid) { return guestViews.get(gKey(e.sender.id, vid)) || null; }
+const mmAiActiveVid = new Map();   // chrome wc id -> active tab vid (so the AI can read the active page)
+ipcMain.on('mm-ai:active-vid', (e, vid) => { try { mmAiActiveVid.set(e.sender.id, vid); } catch (_) {} });
 ipcMain.on('view-create', (e, o) => {
   try {
     const w = senderWin(e); if (!w) return;

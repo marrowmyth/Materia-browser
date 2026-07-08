@@ -27,7 +27,26 @@
       "index.html",
       "newtab.html",
       "socials-data.js",
-      "assets/**/*"
+      "assets/**/*",
+      "mm-ai.js",
+      "lib/**/*",
+      "theme.css",
+      "fonts/**/*",
+      "ai.html",
+      "ai.js",
+      "ai.css",
+      "ai-preload.js",
+      "ai-page.html",
+      "ai-page.js",
+      "ai-page.css",
+      "palette.html",
+      "palette.js",
+      "palette.css",
+      "palette-preload.js",
+      "reader.html",
+      "reader.js",
+      "reader.css",
+      "reader-preload.js"
     ],
     "win": {
       "target": [

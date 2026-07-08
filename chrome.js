@@ -327,6 +327,7 @@ function layoutViews() {
   });
   if (aiW) window.materia.aiPanelBounds({ x: X + W, y: Y, width: aiW, height: H });
   else window.materia.aiPanelHide();
+  try { window.materia.aiActiveTab(activeId); } catch (_) {}   // keep main's active-tab pointer in sync for the AI
   applyChrome();
 }
 window.addEventListener('resize', () => { try { layoutViews(); } catch (_) {} });
@@ -885,6 +886,8 @@ window.materia.onOpenTab((data) => {
 window.materia.onAdoptTab((d) => { try { adoptTab(d); } catch (_) {} });
 // start page sent a query to an AI: open it in the current tab and prefill once loaded
 window.materia.onAIQuery((d) => { const t = activeTab(); if (!t || !d || !d.url) return; t._pendingAI = (d.query || ''); t.view.loadURL(d.url); });
+// the AI assistant asked to bookmark a page (its bookmark_page tool)
+if (window.materia.onAiBookmark) window.materia.onAiBookmark((d) => { try { if (d && d.url) addBookmark({ url: d.url, title: d.title || d.url }); } catch (_) {} });
 // a scripted pop-up: ask non-intrusively, in case it was intentional (OAuth, share…)
 window.materia.onPopupBlocked((url) => showPopupToast(url));
 function showPopupToast(url) {

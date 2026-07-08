@@ -69,5 +69,7 @@ contextBridge.exposeInMainWorld('materia', {
   // AI panel (docked assistant)
   aiToggle: (force) => ipcRenderer.invoke('mm-ai:toggle', force),
   aiPanelBounds: (d) => ipcRenderer.send('mm-ai:panel-bounds', d),
-  aiPanelHide: () => ipcRenderer.send('mm-ai:panel-hide')
+  aiPanelHide: () => ipcRenderer.send('mm-ai:panel-hide'),
+  aiActiveTab: (vid) => ipcRenderer.send('mm-ai:active-vid', vid),
+  onAiBookmark: (cb) => ipcRenderer.on('mm-ai:bookmark', (e, d) => cb(d))
 });
