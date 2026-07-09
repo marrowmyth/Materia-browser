@@ -204,7 +204,7 @@ body.fullscreen #titlebar, body.fullscreen #toolbar, body.fullscreen #bookmarks,
 .panel-sub{font-size:11px; color:var(--ink-faint); letter-spacing:.05em; margin-top:1px}
 #settings-close{margin-left:auto}
 .set-block{padding:16px 0; border-bottom:1px solid var(--line-soft)}
-.set-kofi{border-bottom:none; text-align:center}
+.set-report{border-bottom:none; text-align:center}
 .set-heading{font-size:10px; letter-spacing:.28em; text-transform:uppercase; color:var(--teal); margin-bottom:.5rem; font-family:var(--mono)}
 .set-row{display:flex; align-items:flex-start; justify-content:space-between; gap:14px}
 .set-label{color:var(--ink); font-size:13px; margin-bottom:3px}

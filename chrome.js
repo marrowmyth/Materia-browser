@@ -1566,7 +1566,6 @@ function openList(kind) {
 { const b = $('list-close'); if (b) b.addEventListener('click', () => $('list-panel').classList.add('hidden')); }
 { const b = $('list-clear'); if (b) b.addEventListener('click', () => { (listClearKind === 'history' ? clearHistory : clearDownloads)(); }); }
 { const lp = $('list-panel'); if (lp) lp.addEventListener('click', (e) => { if (e.target === lp) lp.classList.add('hidden'); }); }
-{ const b = $('info-kofi'); if (b) b.addEventListener('click', () => { settings.classList.add('hidden'); createTab('https://ko-fi.com/marrowmyth'); }); }
 { const b = $('info-report'); if (b) b.addEventListener('click', () => { settings.classList.add('hidden'); try { window.materia.openExternal('mailto:PoweredbyMateria@gmail.com?subject=' + encodeURIComponent('Slash Browser — Bug Report') + '&body=' + encodeURIComponent('\n\n—\nSlash Browser v' + ((window.materia && window.materia.appVersion) || ''))); } catch (_) {} }); }
 { const v = (window.materia && window.materia.appVersion) || ''; if (v) document.querySelectorAll('.ver').forEach((el) => { el.textContent = 'v' + v; }); }   // keep the info-panel version label in sync with the running build
 
