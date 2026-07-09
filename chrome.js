@@ -521,7 +521,6 @@ $('nav-back').addEventListener('click', () => { const t = activeTab(); if (t && 
 $('nav-fwd').addEventListener('click', () => { const t = activeTab(); if (t && t.view.canGoForward()) t.view.goForward(); });
 $('nav-reload').addEventListener('click', () => { const t = activeTab(); if (t) t.view.reload(); });
 $('nav-home').addEventListener('click', () => { const t = activeTab(); if (t) t.view.loadURL(newtabUrl()); });
-$('nav-mm').addEventListener('click', () => openInNewTab('https://marrowmyth.com'));
 { const b = $('nav-update'); if (b) b.addEventListener('click', async () => {
   const page = b._url || 'https://github.com/marrowmyth/Materia-browser/releases/latest';
   if (!window.materia.downloadUpdate) { createTab(page); return; }

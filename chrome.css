@@ -32,9 +32,6 @@ body{
   background:linear-gradient(105deg,var(--teal-dim),var(--teal),var(--teal-bright),var(--teal),var(--teal-dim));
   -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
 }
-#nav-mm{padding:0}
-#nav-mm img{width:19px; height:19px; object-fit:contain; display:block; filter:brightness(0) invert(1); opacity:.78; transition:opacity .15s}
-#nav-mm:hover img{opacity:1; filter:brightness(0) invert(1) drop-shadow(0 0 4px var(--teal))}
 #tabs{display:flex; align-items:flex-end; gap:3px; -webkit-app-region:no-drag; max-width:66vw; overflow:hidden}
 .tab{
   /* width:178px is a DEFINITE size (not just flex-basis) — without it, #tabs being content-sized drops the
