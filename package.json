@@ -1,7 +1,7 @@
 {
   "name": "materia-browser",
   "version": "0.4.18",
-  "description": "Materia Browser — a privacy-hardened, MarrowMyth-skinned Chromium browser.",
+  "description": "Slash Browser, a privacy-hardened, AI-native, MarrowMyth-skinned Chromium browser.",
   "author": "F.C. Marrow / MarrowMyth",
   "main": "main.js",
   "scripts": {
@@ -12,7 +12,7 @@
   },
   "build": {
     "appId": "com.marrowmyth.materiabrowser",
-    "productName": "Materia Browser",
+    "productName": "Slash Browser",
     "copyright": "(c) 2026 MarrowMyth",
     "directories": {
       "output": "dist",
@@ -53,7 +53,7 @@
         "nsis"
       ],
       "icon": "build/icon.png",
-      "artifactName": "Materia-Browser-Setup-${version}.${ext}"
+      "artifactName": "Slash-Browser-Setup-${version}.${ext}"
     },
     "nsis": {
       "oneClick": false,
@@ -61,8 +61,8 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Materia Browser",
-      "uninstallDisplayName": "Materia Browser ${version}",
+      "shortcutName": "Slash Browser",
+      "uninstallDisplayName": "Slash Browser ${version}",
       "license": "build/LICENSE.txt",
       "installerHeader": "build/installerHeader.bmp",
       "installerSidebar": "build/installerSidebar.bmp",

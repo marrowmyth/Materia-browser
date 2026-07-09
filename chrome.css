@@ -1,6 +1,6 @@
 :root{
   --bg:#061215; --bg-2:#07171b; --bg-3:#081d22;
-  --teal:#33d1bd; --teal-dim:#11665c; --teal-bright:#cdf7f0; --teal-rgb:51,209,189;
+  --teal:#f1cb53; --teal-dim:#7a6320; --teal-bright:#f9e6a6; --teal-rgb:241,203,83;   /* Slash yellow (default/brand accent) */
   --ink:#dae7ec; --ink-dim:#9fb3b7; --ink-faint:#5e8082;
   --line:rgba(92,148,147,.14); --line-soft:rgba(92,148,147,.08);
   --ui:'Segoe UI',system-ui,-apple-system,Roboto,Arial,sans-serif;
@@ -245,7 +245,7 @@ body.fullscreen #titlebar, body.fullscreen #toolbar, body.fullscreen #bookmarks,
 .swatch{width:30px; height:30px; border-radius:50%; cursor:pointer; border:2px solid transparent; position:relative; transition:transform .12s, border-color .15s}
 .swatch:hover{transform:scale(1.1)}
 .swatch.active{border-color:#fff}
-.swatch[data-t="materia"]{background:radial-gradient(circle at 35% 30%,#33d1bd,#11665c)}
+.swatch[data-t="materia"]{background:radial-gradient(circle at 35% 30%,#f1cb53,#7a6320)}
 .swatch[data-t="crimson"]{background:radial-gradient(circle at 35% 30%,#e1554d,#7a201c)}
 .swatch[data-t="cobalt"]{background:radial-gradient(circle at 35% 30%,#4f93f2,#1d3f73)}
 .swatch[data-t="amethyst"]{background:radial-gradient(circle at 35% 30%,#a96ff2,#3f2273)}

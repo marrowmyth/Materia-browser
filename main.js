@@ -214,9 +214,9 @@ function safeBlockPage(blockedUrl) {
     + '.card{max-width:520px;padding:40px;text-align:center}.ic{color:#e0a93a}h1{font-size:22px;margin:18px 0 8px}p{color:#9fb2b6;line-height:1.55;font-size:14px}'
     + '.host{color:#e1554d;font-family:Consolas,monospace;word-break:break-all}.row{margin-top:26px;display:flex;gap:12px;justify-content:center}'
     + 'button{padding:11px 20px;border-radius:9px;border:1px solid;cursor:pointer;font-size:13px;font-family:inherit}'
-    + '#back{background:#33d1bd;color:#04221d;border-color:#33d1bd}#go{background:transparent;color:#7d8d90;border-color:#2a3437}</style></head><body><div class="card">'
+    + '#back{background:#f1cb53;color:#181203;border-color:#f1cb53}#go{background:transparent;color:#7d8d90;border-color:#2a3437}</style></head><body><div class="card">'
     + '<svg class="ic" width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13.5"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>'
-    + '<h1>Dangerous site blocked</h1><p>Materia stopped you from visiting <span class="host">' + host + '</span> — it appears on a known <b>phishing / malware</b> blocklist.</p>'
+    + '<h1>Dangerous site blocked</h1><p>Slash stopped you from visiting <span class="host">' + host + '</span> — it appears on a known <b>phishing / malware</b> blocklist.</p>'
     + '<div class="row"><button id="back">Back to safety</button><button id="go">Proceed anyway</button></div></div>'
     + '<script>var U=' + u + ';document.getElementById("back").onclick=function(){if(history.length>1)history.back();else location.href="about:blank"};'
     + 'document.getElementById("go").onclick=function(){location.href="https://mm.safe.proceed/?u="+encodeURIComponent(U)};</script></body></html>';
@@ -353,7 +353,7 @@ function createWindow(opts) {
   const py = opts.y ? Math.round(opts.y) - 14 : undefined;
   const w = new BrowserWindow({
     width: 1280, height: 820, minWidth: 760, minHeight: 480, x: px, y: py,
-    frame: false, backgroundColor: '#061215', title: 'Materia Browser',
+    frame: false, backgroundColor: '#061215', title: 'Slash Browser',
     icon: path.join(__dirname, 'assets', 'icon-white.png'),
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true }
   });
@@ -484,7 +484,7 @@ ipcMain.handle('copy-workspace-cookies', async (e, fromPartition, toPartition) =
   } catch (e2) { return { ok: false, error: e2 && e2.message }; }
 });
 ipcMain.handle('open-external', (e, url) => shell.openExternal(url));
-ipcMain.on('notify', (e, data) => { try { if (Notification.isSupported()) new Notification({ title: (data && data.title) || 'Materia', body: (data && data.body) || '' }).show(); } catch (_) {} });
+ipcMain.on('notify', (e, data) => { try { if (Notification.isSupported()) new Notification({ title: (data && data.title) || 'Slash', body: (data && data.body) || '' }).show(); } catch (_) {} });
 
 // ---- native right-click context menu (Electron provides NONE by default) ----
 // On-demand killer for blocking overlays / "turn off your ad blocker" walls: removes
@@ -755,24 +755,24 @@ ipcMain.handle('reset-dl-dir', (e, cat) => { if (prefs.dlDirs) delete prefs.dlDi
 // ---- default browser (Windows): register as a real browser candidate, then open Default Apps so the user picks it ----
 function regEsc(s) { return s.replace(/\\/g, '\\\\').replace(/"/g, '\\"'); }   // escape a string for a .reg value
 function buildBrowserReg(exe) {
-  const e = regEsc(exe), p = 'MateriaBrowser.Html', K = 'HKEY_CURRENT_USER\\Software', SMI = K + '\\Clients\\StartMenuInternet\\MateriaBrowser';
+  const e = regEsc(exe), p = 'SlashBrowser.Html', K = 'HKEY_CURRENT_USER\\Software', SMI = K + '\\Clients\\StartMenuInternet\\SlashBrowser';
   return [
     'Windows Registry Editor Version 5.00', '',
-    '[' + K + '\\Classes\\' + p + ']', '@="Materia Browser HTML Document"', '',
+    '[' + K + '\\Classes\\' + p + ']', '@="Slash Browser HTML Document"', '',
     '[' + K + '\\Classes\\' + p + '\\DefaultIcon]', '@="' + e + ',0"', '',
     '[' + K + '\\Classes\\' + p + '\\shell\\open\\command]', '@="\\"' + e + '\\" \\"%1\\""', '',
-    '[' + SMI + ']', '@="Materia Browser"', '',
+    '[' + SMI + ']', '@="Slash Browser"', '',
     '[' + SMI + '\\DefaultIcon]', '@="' + e + ',0"', '',
     '[' + SMI + '\\shell\\open\\command]', '@="\\"' + e + '\\""', '',
     '[' + SMI + '\\Capabilities]',
-    '"ApplicationName"="Materia Browser"',
+    '"ApplicationName"="Slash Browser"',
     '"ApplicationDescription"="A private, distraction-killing browser by MarrowMyth."',
     '"ApplicationIcon"="' + e + ',0"', '',
     '[' + SMI + '\\Capabilities\\URLAssociations]', '"http"="' + p + '"', '"https"="' + p + '"', '',
     '[' + SMI + '\\Capabilities\\FileAssociations]', '".htm"="' + p + '"', '".html"="' + p + '"', '',
-    '[' + SMI + '\\Capabilities\\StartMenu]', '"StartMenuInternet"="MateriaBrowser"', '',
+    '[' + SMI + '\\Capabilities\\StartMenu]', '"StartMenuInternet"="SlashBrowser"', '',
     '[' + K + '\\RegisteredApplications]',
-    '"MateriaBrowser"="Software\\\\Clients\\\\StartMenuInternet\\\\MateriaBrowser\\\\Capabilities"', ''
+    '"SlashBrowser"="Software\\\\Clients\\\\StartMenuInternet\\\\SlashBrowser\\\\Capabilities"', ''
   ].join('\r\n');
 }
 // Register as a real browser candidate so Windows lists Materia in Default Apps (incl. HTTP/HTTPS).
@@ -792,7 +792,7 @@ ipcMain.handle('default-browser-status', () => ({ supported: process.platform ==
 // download the latest installer ourselves (with progress) and launch it — no GitHub trip
 ipcMain.handle('download-update', async (e, info) => {
   const url = (info && info.url) || 'https://github.com/marrowmyth/Materia-browser/releases/latest/download/Materia-Browser-Setup.exe';
-  const dest = path.join(app.getPath('temp'), 'Materia-Browser-Setup-update.exe');
+  const dest = path.join(app.getPath('temp'), 'Slash-Browser-Setup-update.exe');
   const w = senderWin(e);
   try {
     const res = await fetch(url, { redirect: 'follow' });

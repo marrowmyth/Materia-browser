@@ -4,14 +4,14 @@
 <meta charset="UTF-8">
 <meta name="color-scheme" content="dark">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'">
-<title>Materia Browser</title>
+<title>Slash Browser</title>
 <link rel="stylesheet" href="chrome.css">
 </head>
 <body>
 
   <div id="titlebar">
-    <div class="brand" title="Materia Browser">
-      <span class="brand-name">MATERIA</span>
+    <div class="brand" title="Slash Browser">
+      <span class="brand-name">SLASH</span>
     </div>
     <div id="tabs"></div>
     <button id="newtab" class="iconbtn tab-add" title="New tab (Ctrl+T)">+</button>
@@ -85,10 +85,10 @@
   <div id="settings" class="panel hidden">
     <div class="panel-card">
       <div class="panel-head">
-        <img src="assets/emblem.webp" class="panel-emblem" alt="">
+        <img src="assets/slash-logo.png" class="panel-emblem" alt="">
         <div>
           <h2>Settings</h2>
-          <p class="panel-sub">Materia Browser &mdash; private by design</p>
+          <p class="panel-sub">Slash Browser &mdash; private by design</p>
         </div>
         <button id="settings-close" class="iconbtn" title="Close">&#x2715;</button>
       </div>
@@ -97,7 +97,7 @@
         <p class="set-heading">Appearance</p>
         <p class="set-label" style="margin-bottom:4px">Color scheme</p>
         <div class="theme-swatches" id="theme-swatches">
-          <div class="swatch" data-t="materia" title="Materia"></div>
+          <div class="swatch" data-t="materia" title="Slash"></div>
           <div class="swatch" data-t="crimson" title="Crimson"></div>
           <div class="swatch" data-t="cobalt" title="Cobalt"></div>
           <div class="swatch" data-t="amethyst" title="Amethyst"></div>
@@ -142,8 +142,8 @@
         <p class="set-heading">Default browser</p>
         <div class="set-row" style="align-items:flex-start">
           <div style="flex:1; min-width:0">
-            <p class="set-label">Make Materia your default browser</p>
-            <p class="set-note">Open links from other apps in Materia. Windows asks you to confirm — Materia registers itself and opens <b>Default apps</b>; pick <b>Materia Browser</b> under &ldquo;Web browser.&rdquo;</p>
+            <p class="set-label">Make Slash your default browser</p>
+            <p class="set-note">Open links from other apps in Slash. Windows asks you to confirm — Slash registers itself and opens <b>Default apps</b>; pick <b>Slash Browser</b> under &ldquo;Web browser.&rdquo;</p>
             <p id="default-browser-status" class="set-note" style="margin-top:.45rem"></p>
           </div>
           <button id="set-default-browser" class="set-btn">Set as default</button>
@@ -259,7 +259,7 @@
 
       <div class="set-block">
         <p class="set-heading">Your Data</p>
-        <p class="set-note" style="margin-bottom:1rem">Materia keeps your logins on this device only and never lets sites maintain a persistent profile of you across the web. Clear your trail any time:</p>
+        <p class="set-note" style="margin-bottom:1rem">Slash keeps your logins on this device only and never lets sites maintain a persistent profile of you across the web. Clear your trail any time:</p>
         <button id="clear-keep" class="action-btn action-primary"><svg class="btn-ico" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>Clear Everything &mdash; Keep Me Logged In</button>
         <p class="set-note" style="margin:.5rem 0 1.1rem">Wipes cache, service workers, and site junk. Your cookies &amp; sign-ins stay put.</p>
         <button id="clear-all" class="action-btn action-danger"><svg class="btn-ico" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>Clear Everything &mdash; Sign Me Out</button>
@@ -270,19 +270,19 @@
       <div class="set-block">
         <p class="set-heading">Information &amp; Terms</p>
         <p class="set-note" style="line-height:1.55">
-          <b>Materia Browser</b> <span class="ver">v0.1</span> — a free, privacy-first browser by MarrowMyth, powered by Materia. Built by F.C. Marrow.<br><br>
+          <b>Slash Browser</b> <span class="ver">v0.1</span> — a free, privacy-first browser by MarrowMyth, powered by Slash. Built by F.C. Marrow.<br><br>
           <b>Terms of use</b><br>
           • Provided free, for personal use, as-is and without warranty — you use it at your own discretion.<br>
-          • Privacy is the point: your logins and data stay on this device. Materia sends no telemetry, analytics, or browsing data to us or anyone. Encrypted DNS and WebRTC-leak protection are on by default.<br>
-          • Materia bundles open-source tools (the Ghostery ad-filter engine, EasyList / Fanboy lists, and yt-dlp). They belong to their authors under their own licenses; anything you download is your responsibility — respect the terms and copyright of the sites you visit.<br>
-          • Please don't use Materia for unlawful purposes.<br>
-          • &ldquo;MarrowMyth&rdquo;, &ldquo;Materia&rdquo;, and the Materia Browser artwork are property of MarrowMyth. The engine is Chromium, via Electron, &copy; their respective authors.<br><br>
-          &copy; 2026 MarrowMyth &middot; Powered by Materia &middot; All rights reserved.
+          • Privacy is the point: your logins and data stay on this device. Slash sends no telemetry, analytics, or browsing data to us or anyone. Encrypted DNS and WebRTC-leak protection are on by default.<br>
+          • Slash bundles open-source tools (the Ghostery ad-filter engine, EasyList / Fanboy lists, and yt-dlp). They belong to their authors under their own licenses; anything you download is your responsibility — respect the terms and copyright of the sites you visit.<br>
+          • Please don't use Slash for unlawful purposes.<br>
+          • &ldquo;MarrowMyth&rdquo;, &ldquo;Slash&rdquo;, and the Slash Browser artwork are property of MarrowMyth. The engine is Chromium, via Electron, &copy; their respective authors.<br><br>
+          &copy; 2026 MarrowMyth &middot; Powered by Slash &middot; All rights reserved.
         </p>
       </div>
 
       <div class="set-block set-kofi">
-        <p class="set-note" style="margin-bottom:.7rem; text-align:center">Materia Browser is free. If it's earning its place in your day, or you'd like to make a recommendation, you can help keep it moving.</p>
+        <p class="set-note" style="margin-bottom:.7rem; text-align:center">Slash Browser is free. If it's earning its place in your day, or you'd like to make a recommendation, you can help keep it moving.</p>
         <button id="info-kofi" class="action-btn action-primary"><svg class="btn-ico" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 1 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8z"/></svg>Support development on Ko-fi</button>
         <button id="info-report" class="action-btn" style="margin-top:.55rem"><svg class="btn-ico" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v12H5.2L4 17.2z"/><path d="M12 8v3"/><path d="M12 13.5h.01"/></svg>Report a bug</button>
       </div>
@@ -292,8 +292,8 @@
   <div id="list-panel" class="panel hidden">
     <div class="panel-card">
       <div class="panel-head">
-        <img src="assets/emblem.webp" class="panel-emblem" alt="">
-        <div><h2 id="list-title">History</h2><p class="panel-sub">Materia Browser</p></div>
+        <img src="assets/slash-logo.png" class="panel-emblem" alt="">
+        <div><h2 id="list-title">History</h2><p class="panel-sub">Slash Browser</p></div>
         <button id="list-clear" class="iconbtn" title="Clear"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
         <button id="list-close" class="iconbtn" title="Close">&#x2715;</button>
       </div>
@@ -305,7 +305,7 @@
   <div id="notes-panel" class="panel hidden">
     <div class="panel-card">
       <div class="panel-head">
-        <img src="assets/emblem.webp" class="panel-emblem" alt="">
+        <img src="assets/slash-logo.png" class="panel-emblem" alt="">
         <div><h2>Notes</h2><p class="panel-sub">Quick notes &amp; reminders</p></div>
         <button id="notes-close" class="iconbtn" title="Close">&#x2715;</button>
       </div>

@@ -59,14 +59,14 @@ let seq = 0;
 let closedTabs = [];        // recently closed (url+wsId) for Ctrl+Shift+T
 let dragTabId = null;       // tab being drag-reordered
 let dragWsId = null;        // workspace being drag-reordered
-const THEME_ACCENT = { materia: '#33d1bd', crimson: '#e1554d', cobalt: '#4f93f2', amethyst: '#a96ff2', obsidian: '#c2ced3' };
+const THEME_ACCENT = { materia: '#f1cb53', crimson: '#e1554d', cobalt: '#4f93f2', amethyst: '#a96ff2', obsidian: '#c2ced3' };
 const MAX_WS = THEMES.length;  // one workspace per built-in theme (5)
 const MUTE_SVG = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>';
 const PENCIL_SVG = '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>';
 const COPY_SVG = '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>';
 function wsIndex(id) { const i = workspaces.findIndex(w => w.id === id); return i < 0 ? 0 : Math.min(MAX_WS - 1, i); }
 function wsTheme(id) { const w = workspaces.find(x => x.id === id); return (w && THEMES.includes(w.theme)) ? w.theme : THEMES[wsIndex(id)]; }
-function wsColor(id) { return THEME_ACCENT[wsTheme(id)] || '#33d1bd'; }
+function wsColor(id) { return THEME_ACCENT[wsTheme(id)] || '#f1cb53'; }
 function freeTheme() { const used = new Set(workspaces.map(w => w.theme).filter(t => THEMES.includes(t))); return THEMES.find(t => !used.has(t)) || THEMES[0]; }
 function normalizeWsThemes() { const used = new Set(); workspaces.forEach(w => { if (!THEMES.includes(w.theme) || used.has(w.theme)) w.theme = THEMES.find(t => !used.has(t)) || THEMES[0]; used.add(w.theme); }); }
 
@@ -525,7 +525,7 @@ $('nav-mm').addEventListener('click', () => openInNewTab('https://marrowmyth.com
 { const b = $('nav-update'); if (b) b.addEventListener('click', async () => {
   const page = b._url || 'https://github.com/marrowmyth/Materia-browser/releases/latest';
   if (!window.materia.downloadUpdate) { createTab(page); return; }
-  const ok = await confirmModal('Download and install Materia ' + (b._ver ? 'v' + b._ver + ' ' : '') + 'now? It downloads here, then the installer opens to finish.', 'Update');
+  const ok = await confirmModal('Download and install Slash ' + (b._ver ? 'v' + b._ver + ' ' : '') + 'now? It downloads here, then the installer opens to finish.', 'Update');
   if (!ok) return;
   showMini('Downloading update… 0%');
   const r = await window.materia.downloadUpdate({});
@@ -781,7 +781,7 @@ function renderDefaultBrowser() {
   window.materia.defaultBrowserStatus().then(s => {
     if (!s || !s.supported) { st.textContent = 'Available on Windows.'; st.style.color = 'var(--ink-faint)'; return; }
     if (!s.packaged) { st.textContent = 'Available in the installed app (not in dev mode).'; st.style.color = 'var(--ink-faint)'; return; }
-    st.textContent = s.isDefault ? '● Materia is your default browser.' : '○ Not currently the default.';
+    st.textContent = s.isDefault ? '● Slash is your default browser.' : '○ Not currently the default.';
     st.style.color = s.isDefault ? 'var(--teal)' : 'var(--ink-faint)';
   }).catch(() => {});
 }
@@ -790,7 +790,7 @@ function renderDefaultBrowser() {
   window.materia.setDefaultBrowser().then(r => {
     if (r && r.reason === 'dev') showMini('Works in the installed app — not in dev');
     else if (r && r.reason === 'win-only') showMini('Windows only');
-    else showMini('In Default apps, pick “Materia Browser” for Web browser');
+    else showMini('In Default apps, pick “Slash Browser” for Web browser');
     setTimeout(renderDefaultBrowser, 2000);
   }).catch(() => {});
 }); }
@@ -1567,7 +1567,7 @@ function openList(kind) {
 { const b = $('list-clear'); if (b) b.addEventListener('click', () => { (listClearKind === 'history' ? clearHistory : clearDownloads)(); }); }
 { const lp = $('list-panel'); if (lp) lp.addEventListener('click', (e) => { if (e.target === lp) lp.classList.add('hidden'); }); }
 { const b = $('info-kofi'); if (b) b.addEventListener('click', () => { settings.classList.add('hidden'); createTab('https://ko-fi.com/marrowmyth'); }); }
-{ const b = $('info-report'); if (b) b.addEventListener('click', () => { settings.classList.add('hidden'); try { window.materia.openExternal('mailto:PoweredbyMateria@gmail.com?subject=' + encodeURIComponent('Materia Browser — Bug Report') + '&body=' + encodeURIComponent('\n\n—\nMateria Browser v' + ((window.materia && window.materia.appVersion) || ''))); } catch (_) {} }); }
+{ const b = $('info-report'); if (b) b.addEventListener('click', () => { settings.classList.add('hidden'); try { window.materia.openExternal('mailto:PoweredbyMateria@gmail.com?subject=' + encodeURIComponent('Slash Browser — Bug Report') + '&body=' + encodeURIComponent('\n\n—\nSlash Browser v' + ((window.materia && window.materia.appVersion) || ''))); } catch (_) {} }); }
 { const v = (window.materia && window.materia.appVersion) || ''; if (v) document.querySelectorAll('.ver').forEach((el) => { el.textContent = 'v' + v; }); }   // keep the info-panel version label in sync with the running build
 
 /* ---------- Notes & reminders ---------- */
@@ -1603,7 +1603,7 @@ function checkReminders() {
     // fire the OS notification ONCE per occurrence (catches up if it came due while the browser was closed);
     // the persistent GLOW then carries the reminder until you open Notes — so nothing is missed by being closed.
     n.notified = true; changed = true;
-    try { window.materia.notify({ title: n.title || 'Reminder', body: n.body || (n.repeat === 'daily' ? 'Daily reminder.' : 'A Materia note reminder is due.') }); } catch (_) {}
+    try { window.materia.notify({ title: n.title || 'Reminder', body: n.body || (n.repeat === 'daily' ? 'Daily reminder.' : 'A Slash note reminder is due.') }); } catch (_) {}
   });
   if (changed) { saveNotes(); if (!$('notes-panel').classList.contains('hidden')) renderNotesGrid(); }
   updateNotesGlow();
