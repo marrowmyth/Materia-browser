@@ -354,7 +354,7 @@ function createWindow(opts) {
   const w = new BrowserWindow({
     width: 1280, height: 820, minWidth: 760, minHeight: 480, x: px, y: py,
     frame: false, backgroundColor: '#061215', title: 'Slash Browser',
-    icon: path.join(__dirname, 'assets', 'icon-white.png'),
+    icon: path.join(__dirname, 'assets', 'slash-logo.png'),
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true }
   });
   win = w;
@@ -418,6 +418,7 @@ async function checkForUpdate() {
 }
 app.whenReady().then(() => {
   if (!gotLock) return;   // 2nd instance (lock not acquired): never open a window — prevents the flash+close crash when opening a file while already running
+  try { app.setAppUserModelId('com.marrowmyth.materiabrowser'); } catch (_) {}   // Windows taskbar identity so it uses the app (Slash) icon
   try {
     mmAi.init({
       // the chrome renderer for a window (AI tools send it open-tab / bookmark)
