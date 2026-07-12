@@ -1,5 +1,5 @@
 'use strict';
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('materia', {
   winMin: () => ipcRenderer.send('win-min'),
@@ -26,6 +26,9 @@ contextBridge.exposeInMainWorld('materia', {
   onYtdlp: (cb) => ipcRenderer.on('ytdlp', (e, d) => cb(d)),
   onYtdlpProgress: (cb) => ipcRenderer.on('ytdlp-progress', (e, p) => cb(p)),
   copyText: (t) => ipcRenderer.invoke('copy-text', t),
+  // files dropped in from the OS: File objects can't cross the bridge, so resolve their real paths here
+  droppedFilePaths: (files) => { try { return Array.from(files).map(f => webUtils.getPathForFile(f)).filter(Boolean); } catch (_) { return []; } },
+  pathsToUrls: (paths) => ipcRenderer.invoke('paths-to-urls', paths),
 
   clearData: (partition, keepLogins) => ipcRenderer.invoke('clear-data', partition, keepLogins),
   ensurePartition: (partition) => ipcRenderer.invoke('ensure-partition', partition),

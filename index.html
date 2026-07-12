@@ -98,6 +98,23 @@
       </div>
 
       <div class="set-block">
+        <p class="set-heading">Performance</p>
+        <div class="set-row">
+          <div>
+            <p class="set-label">Sleep inactive tabs</p>
+            <p class="set-note">Background tabs you haven&rsquo;t looked at in a while go to sleep to free memory, and reload the moment you click them. The tab you&rsquo;re on, split panes, pinned tabs and tabs playing sound never sleep.</p>
+          </div>
+          <select id="sleep-select" class="mat-select">
+            <option value="15">After 15 min</option>
+            <option value="30">After 30 min</option>
+            <option value="60">After 1 hour</option>
+            <option value="180">After 3 hours</option>
+            <option value="0">Never</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="set-block">
         <p class="set-heading">Default browser</p>
         <div class="set-row" style="align-items:flex-start">
           <div style="flex:1; min-width:0">

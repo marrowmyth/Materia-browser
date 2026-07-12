@@ -144,13 +144,14 @@ window.materia.onViewEvent((d) => {
   } else if (d.event === 'page-title-updated') tab.view._emit(d.event, { title: p.title });
   else if (d.event === 'page-favicon-updated') tab.view._emit(d.event, { favicons: p.favicons });
   else if (d.event === 'found-in-page') tab.view._emit(d.event, { result: p.result });
+  else if (d.event === 'audio-state-changed') tab.view._emit(d.event, { audible: p.audible });
   else tab.view._emit(d.event, {});
 });
 function makeTab(wsId, url, pinned) {
   const target = url || newtabUrl();
   ensureWs(wsId);
   const id = ++seq;
-  const tab = { id, wsId, title: 'New Tab', url: target, favicon: null, loading: false, pinned: !!pinned };
+  const tab = { id, wsId, title: 'New Tab', url: target, favicon: null, loading: false, pinned: !!pinned, lastActive: Date.now() };
   viewState[id] = { url: target, canBack: false, canForward: false };
   tab.view = makeViewProxy(id);
   window.materia.viewCreate({ vid: id, wsId: wsId, partition: wsPartition(wsId), url: target });
@@ -169,6 +170,9 @@ function createTab(url) {
 function activateTab(id) {
   const t = tabs.find(x => x.id === id);
   if (!t) return;
+  const prev = activeTab(); if (prev && prev.id !== id) prev.lastActive = Date.now();   // idle clock starts when a tab STOPS being looked at
+  t.lastActive = Date.now();
+  if (t.asleep) wakeTab(t);
   activeId = id;
   activeTabByWs[t.wsId] = id;
   if (splitId === id) splitId = null;   // a tab can't be both panes
@@ -218,7 +222,7 @@ function adoptTab(o) {
   const wsId = activeWsId;   // land it in the window's current workspace so it's visible (new windows already set activeWsId to the source's)
   ensureWs(wsId);
   const id = ++seq; const url = o.url || '';
-  const tab = { id, wsId, title: o.title || 'Tab', url: url, favicon: null, loading: false, pinned: false };
+  const tab = { id, wsId, title: o.title || 'Tab', url: url, favicon: null, loading: false, pinned: false, lastActive: Date.now() };
   viewState[id] = { url: url, canBack: false, canForward: false };
   tab.view = makeViewProxy(id);
   tabs.push(tab);
@@ -233,8 +237,8 @@ function renderTabs() {
   const list = wsTabs().slice().sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
   list.forEach(t => {
     const el = document.createElement('div');
-    el.className = 'tab' + (t.id === activeId ? ' active' : '') + (t.id === splitId ? ' split-mate' : '') + (t.pinned ? ' pinned' : '');
-    el.title = t.title;
+    el.className = 'tab' + (t.id === activeId ? ' active' : '') + (t.id === splitId ? ' split-mate' : '') + (t.pinned ? ' pinned' : '') + (t.asleep ? ' asleep' : '');
+    el.title = t.title + (t.asleep ? ' — asleep (click to wake)' : '');
     const fav = document.createElement('img');
     fav.className = 'tab-fav' + (t.favicon ? '' : ' placeholder');
     if (t.favicon) fav.src = t.favicon;
@@ -324,6 +328,7 @@ function openInSplit(id) {
     const t = makeTab(activeWsId, null);   // spawn a fresh tab for the second pane
     splitId = t.id;
   } else {
+    const t = tabs.find(x => x.id === id); if (t && t.asleep) wakeTab(t);   // a pane must be live
     splitId = id;
   }
   layoutViews(); renderTabs(); saveSession();
@@ -352,7 +357,7 @@ function showTabMenu(t, x, y) {
     { label: 'New tab', fn: () => createTab() },
     { label: 'Duplicate tab', fn: () => createTab(t.url) },
     { label: 'Move to new window', fn: () => { try { window.materia.tabMoveOut({ vid: t.id, xfer: newXfer(), url: t.url, title: t.title, wsId: t.wsId }); } catch (_) {} detachTab(t.id); } },
-    { label: 'Reload', fn: () => { try { t.view.reload(); } catch (_) {} } },
+    { label: 'Reload', fn: () => { try { t.asleep ? wakeTab(t) : t.view.reload(); } catch (_) {} } },
     { label: 'Close tab', fn: () => closeTab(t.id) },
     { label: 'Close other tabs', fn: () => { wsTabs().filter(x => x.id !== t.id && !x.pinned).map(x => x.id).forEach(closeTab); } }
   );
@@ -373,6 +378,7 @@ function wireView(tab) {
   };
   v.addEventListener('did-navigate', onNav);
   v.addEventListener('did-navigate-in-page', onNav);
+  v.addEventListener('audio-state-changed', (e) => { tab.audible = !!e.audible; tab.lastActive = Date.now(); });   // playing (or just-stopped) audio counts as activity
   v.addEventListener('found-in-page', (e) => {
     if (tab.id !== activeId) return;
     const r = e.result || {}; const c = $('find-count');
@@ -818,6 +824,39 @@ settings.addEventListener('click', (e) => { if (e.target === settings) settings.
 document.addEventListener('click', () => { $('ws-menu').classList.add('hidden'); hideNewInput(); closeCtxMenu(); if ($('soc-overflow')) $('soc-overflow').classList.remove('open'); if ($('folder-pop')) $('folder-pop').classList.remove('open'); if ($('folder-pop-2')) $('folder-pop-2').classList.remove('open'); });
 // while a tab is being dragged, mark the whole window a valid move-target so the OS "no-drop" cursor never shows
 document.addEventListener('dragover', (e) => { if (dragTabId != null) { e.preventDefault(); try { e.dataTransfer.dropEffect = 'move'; } catch (_) {} } });
+/* ---------- files dragged in from the PC (Explorer) ---------- */
+// The chrome view is full-window and often sits ON TOP of the page (address bar focused — every fresh tab —
+// an overlay open, or the pointer last over the toolbar), and it always owns the toolbar/tab-strip region.
+// Without these handlers an OS file drop there either shows the no-drop cursor or, worse, Electron's default
+// kicks in and NAVIGATES THE CHROME UI ITSELF to the file, wiping out the browser interface. Accept the drag
+// and open the files as tabs in the active workspace instead. Internal drags (tabs/workspaces/bookmarks) are
+// recognized via their state vars and left to their own handlers — the drop guard runs in CAPTURE phase so it
+// checks those vars BEFORE the per-element handlers clear them.
+function isExternalDrag(e) {
+  if (dragTabId != null || dragWsId != null || dragBm) return false;
+  const t = e.dataTransfer && e.dataTransfer.types;
+  return !!t && (Array.prototype.indexOf.call(t, 'Files') >= 0 || Array.prototype.indexOf.call(t, 'text/uri-list') >= 0);
+}
+document.addEventListener('dragover', (e) => { if (isExternalDrag(e)) { e.preventDefault(); try { e.dataTransfer.dropEffect = 'copy'; } catch (_) {} } });
+document.addEventListener('drop', async (e) => {
+  if (dragTabId != null || dragWsId != null || dragBm) return;   // an internal drag — its own handlers own this drop
+  const dt = e.dataTransfer;
+  const hasFiles = !!(dt && dt.files && dt.files.length);
+  if (!hasFiles && isEditable(e.target)) return;   // text dragged into the address bar / a settings field — the default insert is safe
+  e.preventDefault();   // otherwise a drop must NEVER navigate the chrome UI, whatever it carries
+  if (!dt) return;
+  if (hasFiles) {
+    const paths = window.materia.droppedFilePaths(dt.files);
+    const urls = await window.materia.pathsToUrls(paths).catch(() => []);
+    (urls || []).slice(0, 20).forEach((u, i) => { if (i === 0) openInNewTab(u); else makeTab(activeWsId, u); });
+    if (urls && urls.length) { renderTabs(); saveSession(); if (urls.length > 1) showMini('Opened ' + urls.length + ' files'); }
+    return;
+  }
+  // a link dragged in from another app → open it
+  let uri = ''; try { uri = dt.getData('text/uri-list') || dt.getData('text/plain') || ''; } catch (_) {}
+  uri = ((uri.split(/\r?\n/).find(l => l && l[0] !== '#')) || '').trim();
+  if (/^(https?|file):\/\//i.test(uri)) openInNewTab(uri);
+}, true);
 // clicking into a page blurs the chrome (webview clicks don't bubble here) — close transient menus then too
 window.addEventListener('blur', () => { closeCtxMenu(); $('ws-menu').classList.add('hidden'); if ($('soc-overflow')) $('soc-overflow').classList.remove('open'); if ($('folder-pop')) $('folder-pop').classList.remove('open'); if ($('folder-pop-2')) $('folder-pop-2').classList.remove('open'); });
 
@@ -1170,7 +1209,7 @@ let scaleWithWindow = localStorage.getItem('materia-scalewin') === '1';
 function windowScale() { return scaleWithWindow ? Math.max(0.6, Math.min(1.6, window.innerWidth / 1366)) : 1; }
 function effectiveZoom() { return Math.round(pageZoom * windowScale() * 100) / 100; }
 function applyZoom() { const z = effectiveZoom(); tabs.forEach(t => { try { t.view.setZoomFactor(z); } catch (_) {} }); }
-function setZoom(z) { pageZoom = Math.max(0.3, Math.min(3, Math.round(z * 100) / 100)); localStorage.setItem('materia-zoom', String(pageZoom)); applyZoom(); showMini('Zoom ' + Math.round(pageZoom * 100) + '%'); }
+function setZoom(z) { pageZoom = Math.max(0.3, Math.min(3, Math.round(z * 100) / 100)); localStorage.setItem('materia-zoom', String(pageZoom)); applyZoom(); showMini('Zoom ' + Math.round(effectiveZoom() * 100) + '%'); }   // report the zoom pages actually render at (incl. window scaling)
 let _zrt = null;
 window.addEventListener('resize', () => { clearTimeout(_zrt); _zrt = setTimeout(applyZoom, 120); });
 window.addEventListener('wheel', (e) => { if (e.ctrlKey) { e.preventDefault(); setZoom(pageZoom + (e.deltaY < 0 ? 0.1 : -0.1)); } }, { passive: false });
@@ -1209,6 +1248,46 @@ function reopenSpecificClosed(c) {
   if (c.pinned) { t.pinned = true; renderTabs(); saveSession(); }
 }
 function toggleMute(t) { t.muted = !t.muted; try { t.view.setAudioMuted(t.muted); } catch (_) {} renderTabs(); showMini(t.muted ? 'Tab muted' : 'Tab unmuted'); }
+
+/* ---------- tab sleeping (frees the renderer of long-idle background tabs; they reload on click) ---------- */
+// Sleep = destroy the tab's WebContentsView entirely (its renderer process, DOM and media all go away —
+// the real memory win, same idea as Chrome's Memory Saver) while the tab chip stays in the strip with its
+// url/title/favicon. Waking recreates the view under the SAME vid, so the existing proxy + listeners just
+// keep working. Never slept: the visible tab, a split pane, pinned tabs, tabs making sound, new-tab pages.
+let sleepMins = parseInt(localStorage.getItem('materia-sleep-mins'), 10); if (isNaN(sleepMins)) sleepMins = 30;
+function sleepTab(t) {
+  if (t.asleep || t.id === activeId || t.id === splitId) return;
+  t.asleep = true;
+  try { window.materia.viewDestroy({ vid: t.id }); } catch (_) {}
+  const vs = viewState[t.id]; if (vs) { vs.canBack = false; vs.canForward = false; }   // keep the url — it's the wake target
+  renderTabs();
+}
+function wakeTab(t) {
+  if (!t.asleep) return;
+  t.asleep = false;
+  t.lastActive = Date.now();
+  ensureWs(t.wsId);
+  window.materia.viewCreate({ vid: t.id, wsId: t.wsId, partition: wsPartition(t.wsId), url: t.url || newtabUrl() });
+  if (t.muted) { try { t.view.setAudioMuted(true); } catch (_) {} }
+  renderTabs();
+}
+setInterval(() => {
+  if (!sleepMins) return;
+  const cutoff = Date.now() - sleepMins * 60000;
+  tabs.forEach(t => {
+    if (t.id === activeId || t.id === splitId || t.asleep || t.pinned || t.audible || isNewtab(t.url)) return;
+    if ((t.lastActive || 0) > cutoff) return;
+    sleepTab(t);
+  });
+}, 30000);
+{ const s = $('sleep-select'); if (s) {
+  s.value = String(sleepMins); if (s.value !== String(sleepMins)) { s.value = '30'; sleepMins = 30; }
+  s.addEventListener('change', () => {
+    sleepMins = parseInt(s.value, 10) || 0;
+    localStorage.setItem('materia-sleep-mins', String(sleepMins));
+    showMini(sleepMins ? ('Background tabs sleep after ' + (sleepMins >= 60 ? (sleepMins / 60) + 'h' : sleepMins + ' min')) : 'Tab sleeping off');
+  });
+} }
 
 /* ---------- find in page ---------- */
 function showFind() { const fb = $('findbar'); if (!fb) return; fb.classList.remove('hidden'); try { layoutViews(); } catch (_) {} const i = $('find-input'); i.focus(); i.select(); if (i.value.trim()) doFind(i.value); }

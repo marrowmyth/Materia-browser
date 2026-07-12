@@ -90,6 +90,8 @@ body{
 .find-btn:hover{ background:rgba(var(--teal-rgb),.12); color:var(--teal) }
 .tab.tab-drop{ box-shadow:inset 3px 0 0 var(--teal) }
 .tab.dragging{ opacity:.5 }
+.tab.asleep{ opacity:.5 }
+.tab.asleep .tab-fav{ filter:grayscale(1) }
 .tab-mute{ font-size:11px; flex:none; opacity:.85 }
 .drag-spacer{flex:1; height:100%}
 
@@ -353,8 +355,10 @@ body.fullscreen #titlebar, body.fullscreen #toolbar, body.fullscreen #bookmarks,
 .soc-row-input:focus{ border-color:var(--teal) }
 .soc-row-input::placeholder{ color:var(--ink-faint) }
 
-/* mini toast (zoom %, link copied) */
-.mini-toast{ position:fixed; left:50%; bottom:58px; z-index:9999; transform:translateX(-50%) translateY(12px); background:var(--bg-3); border:1px solid var(--line); color:var(--ink); padding:7px 16px; border-radius:20px; font-family:var(--ui); font-size:12.5px; box-shadow:0 12px 32px rgba(0,0,0,.5); opacity:0; pointer-events:none; transition:opacity .2s, transform .2s }
+/* mini toast (zoom %, link copied) — MUST live inside the top chrome strip: while the pointer is over a page
+   the chrome view is z-ordered BEHIND the page view, and the strip is the only chrome region still visible.
+   Anchored bottom (58px) it rendered underneath the page — zoom % was invisible exactly when zooming a page. */
+.mini-toast{ position:fixed; left:50%; top:60px; z-index:9999; transform:translateX(-50%) translateY(-8px); background:var(--bg-3); border:1px solid var(--line); color:var(--ink); padding:7px 16px; border-radius:20px; font-family:var(--ui); font-size:12.5px; box-shadow:0 12px 32px rgba(0,0,0,.5); opacity:0; pointer-events:none; transition:opacity .2s, transform .2s }
 .mini-toast.show{ opacity:1; transform:translateX(-50%) translateY(0) }
 
 /* collapsible settings sections */

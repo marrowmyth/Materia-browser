@@ -442,6 +442,8 @@ ipcMain.on('win-max', (e) => { const w = senderWin(e); if (w) (w.isMaximized() ?
 ipcMain.on('win-close', (e) => { const w = senderWin(e); if (w) w.close(); });
 ipcMain.handle('toggle-fullscreen', (e) => { const w = senderWin(e); if (w) w.setFullScreen(!w.isFullScreen()); return true; });
 ipcMain.handle('copy-text', (e, t) => { try { clipboard.writeText(String(t || '')); } catch (_) {} return true; });
+// files dropped into the chrome from the OS → file:// URLs the tab engine can load
+ipcMain.handle('paths-to-urls', (e, paths) => { try { return (Array.isArray(paths) ? paths : []).slice(0, 50).map(p => { try { return pathToFileURL(String(p)).href; } catch (_) { return null; } }).filter(Boolean); } catch (_) { return []; } });
 // Reclaim keyboard focus to the chrome (address bar) when a <webview> is holding it.
 ipcMain.on('focus-chrome', (e) => { const w = senderWin(e); const c = w && chromeWC(w); if (c) try { c.focus(); } catch (_) {} });
 ipcMain.on('mm-ai-query', (e, data) => { const w = senderWin(e); if (w) csend(w, 'ai-query', data); });
@@ -634,6 +636,7 @@ ipcMain.on('view-create', (e, o) => {
     wc.on('did-navigate', () => send('did-navigate', { url: wc.getURL(), canBack: wc.navigationHistory.canGoBack(), canForward: wc.navigationHistory.canGoForward() }));
     wc.on('did-navigate-in-page', (e2, url, isMain) => { if (isMain) send('did-navigate-in-page', { url: wc.getURL(), canBack: wc.navigationHistory.canGoBack(), canForward: wc.navigationHistory.canGoForward() }); });
     wc.on('found-in-page', (e2, result) => send('found-in-page', { result: result }));
+    wc.on('audio-state-changed', (e2) => send('audio-state-changed', { audible: !!e2.audible }));   // tab sleeping must never take down a tab that's playing sound
     if (o.url) try { wc.loadURL(o.url).catch(() => {}); } catch (_) {}
   } catch (_) {}
 });
@@ -654,7 +657,13 @@ ipcMain.on('view-destroy', (e, d) => {
 ipcMain.on('tab-move-out', (e, d) => {
   try {
     const src = senderWin(e); if (!src) return;
-    const v = guestViews.get(gKey(e.sender.id, d.vid)); if (!v) return;
+    const v = guestViews.get(gKey(e.sender.id, d.vid));
+    if (!v) {   // a SLEEPING tab has no live view to hand over — open a fresh window at the drop point that reloads its URL
+      let spt = { x: Math.round(d.x || 0), y: Math.round(d.y || 0) };
+      try { spt = screen.getCursorScreenPoint(); } catch (_) {}
+      if (d.url) createWindow({ url: d.url, wsId: d.wsId, x: spt.x, y: spt.y });
+      return;
+    }
     guestViews.delete(gKey(e.sender.id, d.vid));
     try { v.setVisible(false); } catch (_) {}
     try { src.contentView.removeChildView(v); } catch (_) {}
