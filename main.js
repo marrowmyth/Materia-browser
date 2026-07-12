@@ -403,15 +403,20 @@ function maybeCheckForUpdate(minGapMs = 15 * 60 * 1000) {
   if (Date.now() - lastUpdateCheck < minGapMs) return;
   checkForUpdate();
 }
+// Self-update source: your OWN GitHub 'owner/repo' that holds your Slash releases.
+// Empty = updates are OFF, and Slash will never pull the upstream Materia browser
+// over your fork. Set this to your repo to self-update from your own builds.
+const UPDATE_REPO = 'PythonLuvr/slash';
 async function checkForUpdate() {
   lastUpdateCheck = Date.now();
+  if (!UPDATE_REPO) return;   // updates disabled until you point this at your own repo
   try {
-    const res = await fetch('https://api.github.com/repos/marrowmyth/Materia-browser/releases/latest', { headers: { 'Accept': 'application/vnd.github+json', 'User-Agent': 'Materia-Browser' } });
+    const res = await fetch('https://api.github.com/repos/' + UPDATE_REPO + '/releases/latest', { headers: { 'Accept': 'application/vnd.github+json', 'User-Agent': 'Slash-Browser' } });
     if (!res.ok) return;
     const data = await res.json();
     const tag = (data.tag_name || '').replace(/^v/i, '');
     if (tag && isNewerVer(tag, app.getVersion())) {
-      const url = data.html_url || 'https://github.com/marrowmyth/Materia-browser/releases/latest';
+      const url = data.html_url || ('https://github.com/' + UPDATE_REPO + '/releases/latest');
       BrowserWindow.getAllWindows().forEach(w => { try { csend(w, 'update-available', { version: tag, url: url }); } catch (_) {} });
     }
   } catch (_) {}
@@ -971,7 +976,8 @@ function isDefaultBrowser() { try { return process.platform === 'win32' && app.i
 ipcMain.handle('default-browser-status', () => ({ supported: process.platform === 'win32', packaged: app.isPackaged, isDefault: isDefaultBrowser() }));
 // download the latest installer ourselves (with progress) and launch it — no GitHub trip
 ipcMain.handle('download-update', async (e, info) => {
-  const url = (info && info.url) || 'https://github.com/marrowmyth/Materia-browser/releases/latest/download/Materia-Browser-Setup.exe';
+  const url = (info && info.url) || (UPDATE_REPO ? 'https://github.com/' + UPDATE_REPO + '/releases/latest/download/Slash-Browser-Setup.exe' : '');
+  if (!url) return { ok: false, error: 'updates are off' };
   const dest = path.join(app.getPath('temp'), 'Slash-Browser-Setup-update.exe');
   const w = senderWin(e);
   try {
