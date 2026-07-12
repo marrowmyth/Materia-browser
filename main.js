@@ -210,8 +210,8 @@ async function initSafeBrowsing() {
 function safeBlockPage(blockedUrl) {
   const host = hostOf(blockedUrl); const u = JSON.stringify(blockedUrl);
   const html = '<!doctype html><html><head><meta charset="utf-8"><meta name="color-scheme" content="dark"><style>'
-    + 'html,body{height:100%;margin:0}body{background:#0a0d0f;color:#dae7ec;font-family:Segoe UI,system-ui,sans-serif;display:flex;align-items:center;justify-content:center}'
-    + '.card{max-width:520px;padding:40px;text-align:center}.ic{color:#e0a93a}h1{font-size:22px;margin:18px 0 8px}p{color:#9fb2b6;line-height:1.55;font-size:14px}'
+    + 'html,body{height:100%;margin:0}body{background:#0c0c0e;color:#e8e8ec;font-family:Segoe UI,system-ui,sans-serif;display:flex;align-items:center;justify-content:center}'
+    + '.card{max-width:520px;padding:40px;text-align:center}.ic{color:#e0a93a}h1{font-size:22px;margin:18px 0 8px}p{color:#9a9aa3;line-height:1.55;font-size:14px}'
     + '.host{color:#e1554d;font-family:Consolas,monospace;word-break:break-all}.row{margin-top:26px;display:flex;gap:12px;justify-content:center}'
     + 'button{padding:11px 20px;border-radius:9px;border:1px solid;cursor:pointer;font-size:13px;font-family:inherit}'
     + '#back{background:#f1cb53;color:#181203;border-color:#f1cb53}#go{background:transparent;color:#7d8d90;border-color:#2a3437}</style></head><body><div class="card">'
@@ -353,7 +353,7 @@ function createWindow(opts) {
   const py = opts.y ? Math.round(opts.y) - 14 : undefined;
   const w = new BrowserWindow({
     width: 1280, height: 820, minWidth: 760, minHeight: 480, x: px, y: py,
-    frame: false, backgroundColor: '#061215', title: 'Slash Browser',
+    frame: false, backgroundColor: '#0c0c0e', title: 'Slash Browser',
     icon: path.join(__dirname, 'assets', 'slash-logo.png'),
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true }
   });
@@ -416,6 +416,62 @@ async function checkForUpdate() {
     }
   } catch (_) {}
 }
+// --- Import bookmarks from other (Chromium) browsers ------------------------
+// Chromium keeps bookmarks in a plain JSON file (no SQLite), so this is read-only
+// and dependency-free. History / passwords would need a SQLite / DPAPI reader.
+const IMPORT_BROWSERS = [
+  { name: 'Chrome', base: () => path.join(process.env.LOCALAPPDATA || '', 'Google', 'Chrome', 'User Data'), profiles: true },
+  { name: 'Edge', base: () => path.join(process.env.LOCALAPPDATA || '', 'Microsoft', 'Edge', 'User Data'), profiles: true },
+  { name: 'Brave', base: () => path.join(process.env.LOCALAPPDATA || '', 'BraveSoftware', 'Brave-Browser', 'User Data'), profiles: true },
+  { name: 'Vivaldi', base: () => path.join(process.env.LOCALAPPDATA || '', 'Vivaldi', 'User Data'), profiles: true },
+  { name: 'Opera', base: () => path.join(process.env.APPDATA || '', 'Opera Software', 'Opera Stable'), profiles: false },
+  { name: 'Opera GX', base: () => path.join(process.env.APPDATA || '', 'Opera Software', 'Opera GX Stable'), profiles: false },
+];
+function importExists(p) { try { return !!p && fs.existsSync(p); } catch (_) { return false; } }
+function importProfiles(base) {
+  const dirs = ['Default'];
+  try { for (const e of fs.readdirSync(base, { withFileTypes: true })) { if (e.isDirectory() && /^Profile \d+$/.test(e.name)) dirs.push(e.name); } } catch (_) {}
+  return [...new Set(dirs)];
+}
+function importBookmarkFile(browserName, profile) {
+  const b = IMPORT_BROWSERS.find((x) => x.name === browserName); if (!b) return null;
+  const base = b.base(); if (!base) return null;
+  const file = b.profiles ? path.join(base, profile || 'Default', 'Bookmarks') : path.join(base, 'Bookmarks');
+  return importExists(file) ? file : null;
+}
+function parseChromiumBookmarks(file) {
+  let json; try { json = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (_) { return []; }
+  const roots = (json && json.roots) || {};
+  const out = []; const seen = new Set();
+  const walk = (node) => {
+    if (!node) return;
+    if (Array.isArray(node.children)) { node.children.forEach(walk); return; }
+    if (node.type === 'url' && node.url && /^https?:\/\//i.test(node.url) && !seen.has(node.url)) {
+      seen.add(node.url); out.push({ title: String(node.name || node.url).slice(0, 300), url: node.url });
+    }
+  };
+  ['bookmark_bar', 'other', 'synced'].forEach((k) => walk(roots[k]));
+  return out;
+}
+function importSources() {
+  const out = [];
+  for (const b of IMPORT_BROWSERS) {
+    const base = b.base(); if (!importExists(base)) continue;
+    const profiles = b.profiles ? importProfiles(base) : [''];
+    for (const pd of profiles) {
+      const file = b.profiles ? path.join(base, pd, 'Bookmarks') : path.join(base, 'Bookmarks');
+      if (!importExists(file)) continue;
+      const n = parseChromiumBookmarks(file).length;
+      if (n > 0) out.push({ id: b.name + '|' + pd, name: b.name, profile: pd || 'Default', count: n });
+    }
+  }
+  return out;
+}
+ipcMain.handle('import:sources', () => { try { return importSources(); } catch (_) { return []; } });
+ipcMain.handle('import:bookmarks', (_e, id) => {
+  try { const [name, pd] = String(id || '').split('|'); const file = importBookmarkFile(name, pd); return file ? parseChromiumBookmarks(file) : []; } catch (_) { return []; }
+});
+
 app.whenReady().then(() => {
   if (!gotLock) return;   // 2nd instance (lock not acquired): never open a window — prevents the flash+close crash when opening a file while already running
   try { app.setAppUserModelId('com.marrowmyth.materiabrowser'); } catch (_) {}   // Windows taskbar identity so it uses the app (Slash) icon
@@ -635,7 +691,7 @@ ipcMain.on('view-create', (e, o) => {
     const w = senderWin(e); if (!w) return;
     try { configurePartition(o.partition); } catch (_) {}
     const view = new WebContentsView({ webPreferences: { partition: o.partition, preload: path.join(__dirname, 'mm-nt-preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: true, plugins: true } });   // plugins:true enables Chromium's built-in PDF viewer (PDFium) so PDFs render inline instead of blanking out
-    try { view.setBackgroundColor('#061215'); } catch (_) {}
+    try { view.setBackgroundColor('#0c0c0e'); } catch (_) {}
     w.contentView.addChildView(view);
     if (w._chromeFull) chromeToTop(w); else chromeToBottom(w);   // restore correct z-order after inserting the page view
     view.setVisible(false);

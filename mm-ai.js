@@ -114,7 +114,7 @@ function ensurePanel(win) {
   v = new WebContentsView({
     webPreferences: { preload: path.join(__dirname, 'ai-preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: false },
   });
-  try { v.setBackgroundColor('#061215'); } catch (_) {}   // Materia's bg, avoids a grey flash
+  try { v.setBackgroundColor('#0c0c0e'); } catch (_) {}   // neutral dark bg, avoids a flash
   win.contentView.addChildView(v);
   v.setVisible(false);
   v.webContents.loadFile(path.join(__dirname, 'ai.html'));

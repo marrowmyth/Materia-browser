@@ -1,8 +1,8 @@
 :root{
-  --bg:#061215; --bg-2:#07171b; --bg-3:#081d22;
+  --bg:#0c0c0e; --bg-2:#141416; --bg-3:#1c1c1f;
   --teal:#f1cb53; --teal-dim:#7a6320; --teal-bright:#f9e6a6; --teal-rgb:241,203,83;   /* Slash yellow (default/brand accent) */
-  --ink:#dae7ec; --ink-dim:#9fb3b7; --ink-faint:#5e8082;
-  --line:rgba(92,148,147,.14); --line-soft:rgba(92,148,147,.08);
+  --ink:#e8e8ec; --ink-dim:#9a9aa3; --ink-faint:#63636b;
+  --line:rgba(255,255,255,.08); --line-soft:rgba(255,255,255,.05);
   --ui:'Segoe UI',system-ui,-apple-system,Roboto,Arial,sans-serif;
   --mono:'Cascadia Mono','Consolas','Share Tech Mono',monospace;
 }
@@ -488,3 +488,10 @@ body.fullscreen #titlebar, body.fullscreen #toolbar, body.fullscreen #bookmarks,
 /* when the AI panel is docked, full-window overlays reserve the dock width so they
    sit in the page area instead of colliding with the panel (--mm-ai-dock set by layoutViews) */
 .panel, #reader, #palette{ right:var(--mm-ai-dock, 0px) }
+
+/* import-from-another-browser rows in Settings */
+.import-row{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:9px 0; border-top:1px solid var(--line-soft) }
+.import-row:first-child{ border-top:none }
+.import-label{ font-size:12.5px; color:var(--ink-dim) }
+.import-label b{ color:var(--ink); font-weight:600 }
+.import-empty{ font-size:12.5px; color:var(--ink-faint) }

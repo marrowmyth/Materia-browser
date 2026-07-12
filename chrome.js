@@ -774,7 +774,7 @@ $('ws-new-input').addEventListener('keydown', (e) => {
 
 /* ---------- settings ---------- */
 const settings = $('settings');
-$('nav-settings').addEventListener('click', () => { settings.classList.remove('hidden'); collapseAllBlocks(); renderProviderSetting(); renderAdblockStatus(); renderTrusted(); renderDefaultBrowser(); renderAiSettings(); });
+$('nav-settings').addEventListener('click', () => { settings.classList.remove('hidden'); collapseAllBlocks(); renderProviderSetting(); renderAdblockStatus(); renderTrusted(); renderDefaultBrowser(); renderAiSettings(); renderImport(); });
 function renderDefaultBrowser() {
   const st = $('default-browser-status'); if (!st || !window.materia.defaultBrowserStatus) return;
   window.materia.defaultBrowserStatus().then(s => {
@@ -1271,7 +1271,7 @@ function palCommands() {
   out.push({ ico: '★', title: 'Bookmark this page', sub: 'Ctrl+D', run: () => toggleBookmark() });
   out.push({ ico: '/', title: 'Toggle AI assistant', sub: 'Ctrl+J', run: () => { try { toggleAi(); } catch (_) {} } });
   if (typeof toggleReader === 'function') out.push({ ico: '☷', title: 'Reader mode', sub: 'F9', run: () => toggleReader() });
-  out.push({ ico: '⚙', title: 'Settings', run: () => { settings.classList.remove('hidden'); try { collapseAllBlocks(); renderProviderSetting(); renderAdblockStatus(); renderTrusted(); renderDefaultBrowser(); renderAiSettings(); } catch (_) {} } });
+  out.push({ ico: '⚙', title: 'Settings', run: () => { settings.classList.remove('hidden'); try { collapseAllBlocks(); renderProviderSetting(); renderAdblockStatus(); renderTrusted(); renderDefaultBrowser(); renderAiSettings(); renderImport(); } catch (_) {} } });
   out.push({ ico: '✕', title: 'Close current tab', sub: 'Ctrl+W', run: () => { if (activeId) closeTab(activeId); } });
   wsTabs().forEach(t => { if (t.id !== activeId && !isNewtab(t.url)) out.push({ ico: '▢', title: t.title || palHost(t.url), sub: palHost(t.url), run: () => activateTab(t.id) }); });
   (workspaces || []).forEach(w => { if (w.id !== activeWsId) out.push({ ico: '◧', title: 'Go to workspace: ' + w.name, run: () => switchWorkspace(w.id) }); });
@@ -1438,6 +1438,49 @@ async function renderAiSettings() {
     setTimeout(() => { if (st) st.textContent = ''; }, 2500);
   });
 })();
+
+/* ---------- import bookmarks from another browser (Settings) ---------- */
+async function renderImport() {
+  const box = $('import-sources'); if (!box) return;
+  box.innerHTML = '<p class="import-empty">Looking for other browsers…</p>';
+  let sources = [];
+  try { sources = await window.materia.importSources(); } catch (_) {}
+  if (!sources || !sources.length) { box.innerHTML = '<p class="import-empty">No other browsers with bookmarks were found.</p>'; return; }
+  box.innerHTML = '';
+  sources.forEach((s) => {
+    const row = document.createElement('div'); row.className = 'import-row';
+    const label = document.createElement('span'); label.className = 'import-label';
+    const b = document.createElement('b'); b.textContent = s.name + (s.profile && s.profile !== 'Default' ? ' (' + s.profile + ')' : '');
+    label.appendChild(b);
+    label.appendChild(document.createTextNode(' · ' + s.count + ' bookmark' + (s.count === 1 ? '' : 's')));
+    const btn = document.createElement('button'); btn.className = 'set-btn'; btn.type = 'button'; btn.textContent = 'Import';
+    btn.addEventListener('click', async () => {
+      btn.disabled = true; btn.textContent = 'Importing…';
+      let marks = [];
+      try { marks = await window.materia.importBookmarks(s.id); } catch (_) {}
+      const added = importBookmarksIntoWs(marks, s.name);
+      btn.textContent = added > 0 ? ('Added ' + added) : 'Nothing new';
+      setTimeout(() => { btn.textContent = 'Import'; btn.disabled = false; }, 2200);
+    });
+    row.appendChild(label); row.appendChild(btn); box.appendChild(row);
+  });
+}
+function importBookmarksIntoWs(marks, browserName) {
+  if (!Array.isArray(marks) || !marks.length) return 0;
+  const arr = wsBookmarks();
+  const folderName = 'Imported from ' + browserName;
+  let folder = arr.find((x) => x.folder && x.name === folderName);
+  if (!folder) { folder = { folder: true, name: folderName, items: [] }; arr.push(folder); }
+  const existing = new Set(folder.items.map((i) => i.url));
+  let added = 0;
+  for (const m of marks) {
+    if (!m || !m.url || existing.has(m.url)) continue;
+    folder.items.push({ url: m.url, title: m.title || m.url, favicon: null });
+    existing.add(m.url); added++;
+  }
+  if (added) { saveBookmarks(); renderBookmarks(); if (typeof updateStar === 'function') updateStar(); }
+  return added;
+}
 
 window.addEventListener('keydown', (e) => {
   const ctrl = e.ctrlKey || e.metaKey; const k = e.key;

@@ -73,5 +73,7 @@ contextBridge.exposeInMainWorld('materia', {
   aiActiveTab: (vid) => ipcRenderer.send('mm-ai:active-vid', vid),
   onAiBookmark: (cb) => ipcRenderer.on('mm-ai:bookmark', (e, d) => cb(d)),
   aiSettingsGet: () => ipcRenderer.invoke('settings:get'),
-  aiSettingsSet: (patch) => ipcRenderer.invoke('settings:set', patch)
+  aiSettingsSet: (patch) => ipcRenderer.invoke('settings:set', patch),
+  importSources: () => ipcRenderer.invoke('import:sources'),
+  importBookmarks: (id) => ipcRenderer.invoke('import:bookmarks', id)
 });

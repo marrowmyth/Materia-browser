@@ -17,18 +17,18 @@
 }
 
 :root {
-  /* Neutrals lifted from Materia's chrome (dark teal-black) so the AI surfaces
-     match the rest of the browser. */
-  --titlebar: #050f12;
-  --paper: #061215;
-  --raised: #0a1f24;
-  --raised-2: #0e2a30;
-  --field: #081b20;
-  --ink: #dae7ec;
-  --muted: #9fb3b7;
-  --faint: #5e8082;
-  --border: rgba(92, 148, 147, 0.14);
-  --border-strong: rgba(92, 148, 147, 0.26);
+  /* Neutral dark grey (leaning black), no color tint, so the AI surfaces match
+     the rest of the browser chrome. */
+  --titlebar: #0a0a0c;
+  --paper: #0c0c0e;
+  --raised: #1c1c1f;
+  --raised-2: #26262a;
+  --field: #1a1a1d;
+  --ink: #e8e8ec;
+  --muted: #9a9aa3;
+  --faint: #63636b;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.15);
 
   /* Slash yellow, our brand accent (themeable; overridden at runtime). */
   --accent: #f1cb53;
