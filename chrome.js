@@ -774,7 +774,7 @@ $('ws-new-input').addEventListener('keydown', (e) => {
 
 /* ---------- settings ---------- */
 const settings = $('settings');
-$('nav-settings').addEventListener('click', () => { settings.classList.remove('hidden'); collapseAllBlocks(); renderProviderSetting(); renderAdblockStatus(); renderTrusted(); renderDefaultBrowser(); renderAiSettings(); renderImport(); });
+$('nav-settings').addEventListener('click', () => { settings.classList.remove('hidden'); collapseAllBlocks(); renderProviderSetting(); renderAdblockStatus(); renderTrusted(); renderDefaultBrowser(); renderAiSettings(); renderImport(); renderPasswordImport(); });
 function renderDefaultBrowser() {
   const st = $('default-browser-status'); if (!st || !window.materia.defaultBrowserStatus) return;
   window.materia.defaultBrowserStatus().then(s => {
@@ -1271,7 +1271,7 @@ function palCommands() {
   out.push({ ico: '★', title: 'Bookmark this page', sub: 'Ctrl+D', run: () => toggleBookmark() });
   out.push({ ico: '/', title: 'Toggle AI assistant', sub: 'Ctrl+J', run: () => { try { toggleAi(); } catch (_) {} } });
   if (typeof toggleReader === 'function') out.push({ ico: '☷', title: 'Reader mode', sub: 'F9', run: () => toggleReader() });
-  out.push({ ico: '⚙', title: 'Settings', run: () => { settings.classList.remove('hidden'); try { collapseAllBlocks(); renderProviderSetting(); renderAdblockStatus(); renderTrusted(); renderDefaultBrowser(); renderAiSettings(); renderImport(); } catch (_) {} } });
+  out.push({ ico: '⚙', title: 'Settings', run: () => { settings.classList.remove('hidden'); try { collapseAllBlocks(); renderProviderSetting(); renderAdblockStatus(); renderTrusted(); renderDefaultBrowser(); renderAiSettings(); renderImport(); renderPasswordImport(); } catch (_) {} } });
   out.push({ ico: '✕', title: 'Close current tab', sub: 'Ctrl+W', run: () => { if (activeId) closeTab(activeId); } });
   wsTabs().forEach(t => { if (t.id !== activeId && !isNewtab(t.url)) out.push({ ico: '▢', title: t.title || palHost(t.url), sub: palHost(t.url), run: () => activateTab(t.id) }); });
   (workspaces || []).forEach(w => { if (w.id !== activeWsId) out.push({ ico: '◧', title: 'Go to workspace: ' + w.name, run: () => switchWorkspace(w.id) }); });
@@ -1480,6 +1480,62 @@ function importBookmarksIntoWs(marks, browserName) {
   }
   if (added) { saveBookmarks(); renderBookmarks(); if (typeof updateStar === 'function') updateStar(); }
   return added;
+}
+
+/* ---------- passwords: import from another browser + saved-passwords viewer ---------- */
+async function renderPasswordImport() {
+  const box = $('pw-import-sources'); if (!box) return;
+  box.innerHTML = '<p class="import-empty">Looking for other browsers…</p>';
+  let sources = [];
+  try { sources = await window.materia.importPasswordSources(); } catch (_) {}
+  if (!sources || !sources.length) { box.innerHTML = '<p class="import-empty">No other browsers with saved passwords were found.</p>'; }
+  else {
+    box.innerHTML = '';
+    sources.forEach((s) => {
+      const row = document.createElement('div'); row.className = 'import-row';
+      const label = document.createElement('span'); label.className = 'import-label';
+      const b = document.createElement('b'); b.textContent = s.name + (s.profile && s.profile !== 'Default' ? ' (' + s.profile + ')' : '');
+      label.appendChild(b);
+      const btn = document.createElement('button'); btn.className = 'set-btn'; btn.type = 'button'; btn.textContent = 'Import';
+      btn.addEventListener('click', async () => {
+        btn.disabled = true; btn.textContent = 'Importing…';
+        let r = {}; try { r = await window.materia.importPasswords(s.id); } catch (_) { r = { error: 'fail' }; }
+        if (r && r.error) { btn.textContent = r.error === 'locked' ? 'Close it first' : 'Failed'; }
+        else { btn.textContent = 'Added ' + (r.added || 0) + (r.locked ? ' · ' + r.locked + ' locked' : ''); renderSavedPasswords(); }
+        setTimeout(() => { btn.textContent = 'Import'; btn.disabled = false; }, 3200);
+      });
+      row.appendChild(label); row.appendChild(btn); box.appendChild(row);
+    });
+  }
+  renderSavedPasswords();
+}
+async function renderSavedPasswords() {
+  const box = $('pw-saved'); if (!box) return;
+  let items = []; try { items = await window.materia.passwordsList(); } catch (_) {}
+  if (!items || !items.length) { box.innerHTML = ''; return; }
+  box.innerHTML = '';
+  const head = document.createElement('div'); head.className = 'pw-head';
+  const count = document.createElement('span'); count.textContent = items.length + ' saved password' + (items.length === 1 ? '' : 's'); head.appendChild(count);
+  const clear = document.createElement('button'); clear.className = 'set-btn'; clear.type = 'button'; clear.textContent = 'Clear all';
+  clear.addEventListener('click', async () => { try { await window.materia.passwordsClear(); } catch (_) {} renderSavedPasswords(); });
+  head.appendChild(clear); box.appendChild(head);
+  items.forEach((it) => {
+    const row = document.createElement('div'); row.className = 'pw-row';
+    let host = it.origin; try { host = new URL(it.origin).hostname.replace(/^www\./, ''); } catch (_) {}
+    const info = document.createElement('div'); info.className = 'pw-info';
+    const h = document.createElement('div'); h.className = 'pw-host'; h.textContent = host;
+    const u = document.createElement('div'); u.className = 'pw-user'; u.textContent = it.username || '(no username)';
+    info.appendChild(h); info.appendChild(u);
+    const actions = document.createElement('div'); actions.className = 'pw-actions';
+    const copyU = document.createElement('button'); copyU.className = 'pw-mini'; copyU.type = 'button'; copyU.textContent = 'User'; copyU.title = 'Copy username';
+    copyU.addEventListener('click', () => { if (it.username) window.materia.copyText(it.username); copyU.textContent = 'Copied'; setTimeout(() => (copyU.textContent = 'User'), 1200); });
+    const copyP = document.createElement('button'); copyP.className = 'pw-mini'; copyP.type = 'button'; copyP.textContent = 'Password'; copyP.title = 'Copy password';
+    copyP.addEventListener('click', async () => { let pw = ''; try { pw = await window.materia.passwordReveal(it); } catch (_) {} if (pw) window.materia.copyText(pw); copyP.textContent = 'Copied'; setTimeout(() => (copyP.textContent = 'Password'), 1200); });
+    const del = document.createElement('button'); del.className = 'pw-mini pw-del'; del.type = 'button'; del.textContent = '✕'; del.title = 'Delete';
+    del.addEventListener('click', async () => { try { await window.materia.passwordDelete(it); } catch (_) {} renderSavedPasswords(); });
+    actions.appendChild(copyU); actions.appendChild(copyP); actions.appendChild(del);
+    row.appendChild(info); row.appendChild(actions); box.appendChild(row);
+  });
 }
 
 window.addEventListener('keydown', (e) => {

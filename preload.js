@@ -75,5 +75,11 @@ contextBridge.exposeInMainWorld('materia', {
   aiSettingsGet: () => ipcRenderer.invoke('settings:get'),
   aiSettingsSet: (patch) => ipcRenderer.invoke('settings:set', patch),
   importSources: () => ipcRenderer.invoke('import:sources'),
-  importBookmarks: (id) => ipcRenderer.invoke('import:bookmarks', id)
+  importBookmarks: (id) => ipcRenderer.invoke('import:bookmarks', id),
+  importPasswordSources: () => ipcRenderer.invoke('import:password-sources'),
+  importPasswords: (id) => ipcRenderer.invoke('import:passwords', id),
+  passwordsList: () => ipcRenderer.invoke('passwords:list'),
+  passwordReveal: (d) => ipcRenderer.invoke('passwords:reveal', d),
+  passwordDelete: (d) => ipcRenderer.invoke('passwords:delete', d),
+  passwordsClear: () => ipcRenderer.invoke('passwords:clear')
 });

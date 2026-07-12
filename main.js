@@ -472,6 +472,126 @@ ipcMain.handle('import:bookmarks', (_e, id) => {
   try { const [name, pd] = String(id || '').split('|'); const file = importBookmarkFile(name, pd); return file ? parseChromiumBookmarks(file) : []; } catch (_) { return []; }
 });
 
+// --- Import saved passwords from other (Chromium) browsers ------------------
+// Decrypts locally on this machine: the AES key lives in Local State wrapped by
+// Windows DPAPI (CurrentUser); each password is AES-256-GCM under that key. We
+// store the results in an encrypted-at-rest vault (safeStorage / DPAPI). The
+// newest Chrome's app-bound (v20) entries cannot be read by another app and are
+// reported as locked, not decrypted.
+const pwCrypto = require('crypto');
+const { execFileSync: pwExecFileSync } = require('child_process');
+const { safeStorage: pwSafe } = require('electron');
+let pwSQL = null;
+function pwGetSQL() {
+  if (!pwSQL) {
+    const initSqlJs = require('sql.js');
+    const wasmBinary = fs.readFileSync(path.join(__dirname, 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm'));
+    pwSQL = initSqlJs({ wasmBinary });
+  }
+  return pwSQL;
+}
+function pwDpapi(buf) {
+  const b64 = buf.toString('base64');
+  const script = "$ErrorActionPreference='Stop';Add-Type -AssemblyName System.Security;$b=[Convert]::FromBase64String('" + b64 + "');$d=[System.Security.Cryptography.ProtectedData]::Unprotect($b,$null,[System.Security.Cryptography.DataProtectionScope]::CurrentUser);[Convert]::ToBase64String($d)";
+  const out = pwExecFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { encoding: 'utf8', windowsHide: true, maxBuffer: 4 * 1024 * 1024 });
+  return Buffer.from(String(out).trim(), 'base64');
+}
+function pwMasterKey(base) {
+  const j = JSON.parse(fs.readFileSync(path.join(base, 'Local State'), 'utf8'));
+  let enc = Buffer.from(j.os_crypt.encrypted_key, 'base64');
+  if (enc.slice(0, 5).toString('latin1') === 'DPAPI') enc = enc.slice(5);
+  return pwDpapi(enc);
+}
+function pwDecrypt(blob, key) {
+  if (!blob || !blob.length) return '';
+  const prefix = blob.slice(0, 3).toString('latin1');
+  if (prefix === 'v10' || prefix === 'v11') {
+    const nonce = blob.slice(3, 15), tag = blob.slice(blob.length - 16), ct = blob.slice(15, blob.length - 16);
+    const d = pwCrypto.createDecipheriv('aes-256-gcm', key, nonce); d.setAuthTag(tag);
+    return Buffer.concat([d.update(ct), d.final()]).toString('utf8');
+  }
+  if (prefix === 'v20') return null; // app-bound (newest Chrome); another app cannot decrypt
+  try { return pwDpapi(blob).toString('utf8'); } catch (_) { return null; }
+}
+async function pwReadLogins(browserName, profile) {
+  const b = IMPORT_BROWSERS.find((x) => x.name === browserName); if (!b) return { error: 'unknown' };
+  const base = b.base();
+  const file = b.profiles ? path.join(base, profile || 'Default', 'Login Data') : path.join(base, 'Login Data');
+  if (!importExists(file)) return { items: [], locked: 0 };
+  let buf;
+  const tmp = path.join(app.getPath('temp'), 'slash-imp-' + process.pid + '-' + Date.now() + '.db');
+  try { fs.copyFileSync(file, tmp); buf = fs.readFileSync(tmp); } catch (_) { try { buf = fs.readFileSync(file); } catch (e2) { return { error: 'locked' }; } }
+  try { fs.unlinkSync(tmp); } catch (_) {}
+  let key; try { key = pwMasterKey(base); } catch (_) { return { error: 'key' }; }
+  let SQL; try { SQL = await pwGetSQL(); } catch (_) { return { error: 'sql' }; }
+  let db; try { db = new SQL.Database(new Uint8Array(buf)); } catch (_) { return { error: 'db' }; }
+  let rows = [];
+  try { const r = db.exec('SELECT origin_url, username_value, password_value FROM logins'); if (r[0]) rows = r[0].values; } catch (_) {}
+  try { db.close(); } catch (_) {}
+  const items = []; let locked = 0;
+  for (const row of rows) {
+    const url = row[0], user = row[1], pw = row[2];
+    const blob = pw ? Buffer.from(pw) : Buffer.alloc(0);
+    let plain; try { plain = pwDecrypt(blob, key); } catch (_) { plain = null; }
+    if (plain === null) { locked++; continue; }
+    if (!url || plain === '') continue;
+    items.push({ origin: String(url), username: String(user || ''), password: plain });
+  }
+  return { items, locked };
+}
+// vault, encrypted at rest with safeStorage (Windows DPAPI), same as the AI keys
+function pwVaultPath() { return path.join(app.getPath('userData'), 'slash-passwords.dat'); }
+function pwLoadVault() {
+  try {
+    const raw = fs.readFileSync(pwVaultPath());
+    if (pwSafe.isEncryptionAvailable()) { try { return JSON.parse(pwSafe.decryptString(raw)); } catch (_) {} }
+    return JSON.parse(raw.toString('utf8'));
+  } catch (_) { return []; }
+}
+function pwSaveVault(items) {
+  try {
+    const json = JSON.stringify(items);
+    const data = pwSafe.isEncryptionAvailable() ? pwSafe.encryptString(json) : Buffer.from(json, 'utf8');
+    fs.writeFileSync(pwVaultPath(), data);
+  } catch (_) {}
+}
+function pwOrigin(u) { try { return new URL(u).origin; } catch (_) { return ''; } }
+
+ipcMain.handle('import:password-sources', () => {
+  try {
+    const out = [];
+    for (const b of IMPORT_BROWSERS) {
+      const base = b.base(); if (!importExists(base)) continue;
+      const profiles = b.profiles ? importProfiles(base) : [''];
+      for (const pd of profiles) {
+        const file = b.profiles ? path.join(base, pd, 'Login Data') : path.join(base, 'Login Data');
+        if (importExists(file)) out.push({ id: b.name + '|' + pd, name: b.name, profile: pd || 'Default' });
+      }
+    }
+    return out;
+  } catch (_) { return []; }
+});
+ipcMain.handle('import:passwords', async (_e, id) => {
+  try {
+    const [name, pd] = String(id || '').split('|');
+    const res = await pwReadLogins(name, pd);
+    if (res.error) return res;
+    const vault = pwLoadVault();
+    const seen = new Set(vault.map((v) => v.origin + '\n' + v.username));
+    let added = 0;
+    for (const it of res.items) { const k = it.origin + '\n' + it.username; if (seen.has(k)) continue; seen.add(k); vault.push(it); added++; }
+    pwSaveVault(vault);
+    return { added, locked: res.locked || 0, total: res.items.length };
+  } catch (e) { return { error: 'fail', message: String((e && e.message) || e) }; }
+});
+ipcMain.handle('passwords:list', () => { try { return pwLoadVault().map((v) => ({ origin: v.origin, username: v.username })); } catch (_) { return []; } });
+ipcMain.handle('passwords:reveal', (_e, d) => { try { const v = pwLoadVault().find((x) => x.origin === d.origin && x.username === d.username); return v ? v.password : ''; } catch (_) { return ''; } });
+ipcMain.handle('passwords:delete', (_e, d) => { try { const v = pwLoadVault().filter((x) => !(x.origin === d.origin && x.username === d.username)); pwSaveVault(v); return true; } catch (_) { return false; } });
+ipcMain.handle('passwords:clear', () => { try { pwSaveVault([]); return true; } catch (_) { return false; } });
+ipcMain.handle('passwords:for-origin', (_e, url) => {
+  try { const o = pwOrigin(url); if (!o) return null; const m = pwLoadVault().find((v) => pwOrigin(v.origin) === o); return m ? { username: m.username, password: m.password } : null; } catch (_) { return null; }
+});
+
 app.whenReady().then(() => {
   if (!gotLock) return;   // 2nd instance (lock not acquired): never open a window — prevents the flash+close crash when opening a file while already running
   try { app.setAppUserModelId('com.marrowmyth.materiabrowser'); } catch (_) {}   // Windows taskbar identity so it uses the app (Slash) icon

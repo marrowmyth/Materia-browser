@@ -495,3 +495,14 @@ body.fullscreen #titlebar, body.fullscreen #toolbar, body.fullscreen #bookmarks,
 .import-label{ font-size:12.5px; color:var(--ink-dim) }
 .import-label b{ color:var(--ink); font-weight:600 }
 .import-empty{ font-size:12.5px; color:var(--ink-faint) }
+
+/* saved-passwords list in Settings */
+.pw-head{ display:flex; align-items:center; justify-content:space-between; margin:2px 0 8px; font-size:12.5px; color:var(--ink-dim) }
+.pw-row{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:8px 0; border-top:1px solid var(--line-soft) }
+.pw-info{ min-width:0 }
+.pw-host{ font-size:12.5px; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.pw-user{ font-size:11px; color:var(--ink-faint); white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.pw-actions{ display:flex; gap:6px; flex:0 0 auto }
+.pw-mini{ padding:4px 9px; border-radius:6px; border:1px solid var(--line); background:var(--bg); color:var(--ink-dim); cursor:pointer; font-size:11px; font-family:var(--ui) }
+.pw-mini:hover{ color:#f1cb53; border-color:rgba(241,203,83,.4) }
+.pw-del:hover{ color:#e0665c; border-color:rgba(224,102,92,.4) }
