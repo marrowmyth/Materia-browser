@@ -14,6 +14,11 @@
     "appId": "com.marrowmyth.materiabrowser",
     "productName": "Slash Browser",
     "copyright": "(c) 2026 MarrowMyth",
+    "afterPack": "scripts/evs-sign.js",
+    "electronDownload": {
+      "mirror": "https://github.com/castlabs/electron-releases/releases/download/",
+      "customDir": "v42.3.3+wvcus"
+    },
     "directories": {
       "output": "dist",
       "buildResources": "build"
@@ -71,7 +76,7 @@
     }
   },
   "devDependencies": {
-    "electron": "^42.5.0",
+    "electron": "github:castlabs/electron-releases#v42.3.3+wvcus",
     "electron-builder": "^26.15.3"
   },
   "dependencies": {

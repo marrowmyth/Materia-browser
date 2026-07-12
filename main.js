@@ -1,5 +1,5 @@
 'use strict';
-const { app, BrowserWindow, WebContentsView, session, ipcMain, shell, webContents, nativeTheme, Menu, clipboard, dialog, Notification, screen } = require('electron');
+const { app, BrowserWindow, WebContentsView, session, ipcMain, shell, webContents, nativeTheme, Menu, clipboard, dialog, Notification, screen, components } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { pathToFileURL } = require('url');
@@ -424,8 +424,8 @@ const IMPORT_BROWSERS = [
   { name: 'Edge', base: () => path.join(process.env.LOCALAPPDATA || '', 'Microsoft', 'Edge', 'User Data'), profiles: true },
   { name: 'Brave', base: () => path.join(process.env.LOCALAPPDATA || '', 'BraveSoftware', 'Brave-Browser', 'User Data'), profiles: true },
   { name: 'Vivaldi', base: () => path.join(process.env.LOCALAPPDATA || '', 'Vivaldi', 'User Data'), profiles: true },
-  { name: 'Opera', base: () => path.join(process.env.APPDATA || '', 'Opera Software', 'Opera Stable'), profiles: false },
-  { name: 'Opera GX', base: () => path.join(process.env.APPDATA || '', 'Opera Software', 'Opera GX Stable'), profiles: false },
+  { name: 'Opera', base: () => path.join(process.env.APPDATA || '', 'Opera Software', 'Opera Stable'), profiles: true },
+  { name: 'Opera GX', base: () => path.join(process.env.APPDATA || '', 'Opera Software', 'Opera GX Stable'), profiles: true },
 ];
 function importExists(p) { try { return !!p && fs.existsSync(p); } catch (_) { return false; } }
 function importProfiles(base) {
@@ -595,6 +595,7 @@ ipcMain.handle('passwords:for-origin', (_e, url) => {
 app.whenReady().then(() => {
   if (!gotLock) return;   // 2nd instance (lock not acquired): never open a window — prevents the flash+close crash when opening a file while already running
   try { app.setAppUserModelId('com.marrowmyth.materiabrowser'); } catch (_) {}   // Windows taskbar identity so it uses the app (Slash) icon
+  try { if (components && components.whenReady) components.whenReady().catch(() => {}); } catch (_) {}   // load the Widevine CDM (castlabs Electron) so Netflix / Spotify / DRM streaming plays
   try {
     mmAi.init({
       // the chrome renderer for a window (AI tools send it open-tab / bookmark)
