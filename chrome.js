@@ -160,7 +160,7 @@ function makeTab(wsId, url, pinned) {
   const target = url || newtabUrl();
   ensureWs(wsId);
   const id = ++seq;
-  const tab = { id, wsId, title: 'New Tab', url: target, favicon: null, loading: false, pinned: !!pinned };
+  const tab = { id, wsId, title: 'New Tab', url: target, favicon: null, loading: false, pinned: !!pinned, lastActive: Date.now(), asleep: false, audible: false };
   viewState[id] = { url: target, canBack: false, canForward: false };
   tab.view = makeViewProxy(id);
   window.materia.viewCreate({ vid: id, wsId: wsId, partition: wsPartition(wsId), url: target });
@@ -179,6 +179,8 @@ function createTab(url) {
 function activateTab(id) {
   const t = tabs.find(x => x.id === id);
   if (!t) return;
+  if (t.asleep) wakeTab(t);   // recreate its view before showing it
+  t.lastActive = Date.now();
   activeId = id;
   activeTabByWs[t.wsId] = id;
   if (splitId === id) splitId = null;   // a tab can't be both panes
@@ -243,7 +245,7 @@ function renderTabs() {
   const list = wsTabs().slice().sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
   list.forEach(t => {
     const el = document.createElement('div');
-    el.className = 'tab' + (t.id === activeId ? ' active' : '') + (t.id === splitId ? ' split-mate' : '') + (t.pinned ? ' pinned' : '');
+    el.className = 'tab' + (t.id === activeId ? ' active' : '') + (t.id === splitId ? ' split-mate' : '') + (t.pinned ? ' pinned' : '') + (t.asleep ? ' asleep' : '');
     el.title = t.title;
     const fav = document.createElement('img');
     fav.className = 'tab-fav' + (t.favicon ? '' : ' placeholder');
@@ -263,7 +265,7 @@ function renderTabs() {
     el.addEventListener('click', () => activateTab(t.id));
     el.addEventListener('auxclick', (e) => { if (e.button === 1) closeTab(t.id); });
     el.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); showTabMenu(t, e.clientX, e.clientY); });
-    el.addEventListener('dragstart', (e) => { dragTabId = t.id; el.classList.add('dragging'); document.body.classList.add('tab-dragging'); applyChrome(); try { e.dataTransfer.effectAllowed = 'move'; } catch (_) {} });
+    el.addEventListener('dragstart', (e) => { if (t.asleep) wakeTab(t); dragTabId = t.id; el.classList.add('dragging'); document.body.classList.add('tab-dragging'); applyChrome(); try { e.dataTransfer.effectAllowed = 'move'; } catch (_) {} });
     el.addEventListener('dragend', (e) => {
       el.classList.remove('dragging'); document.body.classList.remove('tab-dragging'); const torn = dragTabId; dragTabId = null; applyChrome();
       // dropped outside this window's bounds → tear the tab into its own window
@@ -311,6 +313,8 @@ function applyChrome() {
 }
 document.addEventListener('mousemove', (e) => { _lastY = e.clientY; applyChrome(); }, true);
 function layoutViews() {
+  const _wa = tabs.find(t => t.id === activeId); if (_wa && _wa.asleep) wakeTab(_wa);            // never position a slept view
+  const _ws = splitId && tabs.find(t => t.id === splitId); if (_ws && _ws.asleep) wakeTab(_ws);
   if (splitId && !tabs.some(t => t.id === splitId && t.wsId === activeWsId && t.id !== activeId)) splitId = null;
   const on = !!splitId;
   const r = viewsEl.getBoundingClientRect();
@@ -349,6 +353,51 @@ function exitSplit() { splitId = null; layoutViews(); renderTabs(); }
 
 /* ---------- tab pinning + generic right-click menu ---------- */
 function togglePin(t) { t.pinned = !t.pinned; renderTabs(); saveSession(); }
+
+/* ---------- RAM saver: sleep idle background tabs (free the renderer, reload on click) ---------- */
+let ramSaver = (localStorage.getItem('materia-ramsaver') || '1') === '1';   // default ON
+let sleepAfterMin = parseInt(localStorage.getItem('materia-sleep-min') || '15', 10) || 15;
+let sleepTimer = null;
+function sleepEligible(t) {
+  return t && !t.asleep && t.id !== activeId && t.id !== splitId && !t.pinned && !t.audible && !isNewtab(t.url) && !t.loading;
+}
+function sleepTab(t) {
+  if (!sleepEligible(t)) return;
+  t._wakeUrl = (t.view && t.view.getURL && t.view.getURL()) || t.url;
+  t.asleep = true;
+  try { window.materia.viewDestroy({ vid: t.id }); } catch (_) {}   // frees the tab's renderer process
+  if (viewState[t.id]) viewState[t.id].url = t._wakeUrl;             // keep url so getURL stays correct while asleep
+  renderTabs();
+}
+function wakeTab(t) {
+  if (!t || !t.asleep) return;
+  t.asleep = false;
+  const url = t._wakeUrl || t.url || newtabUrl();
+  viewState[t.id] = { url, canBack: false, canForward: false };
+  try { window.materia.viewCreate({ vid: t.id, wsId: t.wsId, partition: wsPartition(t.wsId), url: url }); } catch (_) {}
+  t.lastActive = Date.now();
+  renderTabs();
+}
+function sleepSweep() {
+  if (!ramSaver) return;
+  const now = Date.now(), cutoff = Math.max(1, sleepAfterMin) * 60000;
+  tabs.forEach((t) => {
+    if (!sleepEligible(t)) return;
+    if (!t.lastActive) { t.lastActive = now; return; }
+    if (now - t.lastActive > cutoff) sleepTab(t);
+  });
+}
+function startSleepSweep() {
+  if (sleepTimer) { clearInterval(sleepTimer); sleepTimer = null; }
+  if (ramSaver) sleepTimer = setInterval(sleepSweep, 60000);
+}
+startSleepSweep();
+function renderPerf() {
+  const t = $('toggle-ramsaver'); if (t) t.checked = ramSaver;
+  const s = $('sleep-after'); if (s) s.value = String(sleepAfterMin);
+}
+{ const t = $('toggle-ramsaver'); if (t) t.addEventListener('change', () => { ramSaver = !!t.checked; localStorage.setItem('materia-ramsaver', ramSaver ? '1' : '0'); startSleepSweep(); }); }
+{ const s = $('sleep-after'); if (s) s.addEventListener('change', () => { sleepAfterMin = parseInt(s.value, 10) || 15; localStorage.setItem('materia-sleep-min', String(sleepAfterMin)); }); }
 function closeCtxMenu() { const e = $('ctx-menu'); if (e) e.remove(); }
 function showMenu(items, x, y) {
   closeCtxMenu();
@@ -390,6 +439,8 @@ function wireView(tab) {
   };
   v.addEventListener('did-navigate', onNav);
   v.addEventListener('did-navigate-in-page', onNav);
+  v.addEventListener('media-started-playing', () => { tab.audible = true; });   // RAM-saver skips audible tabs
+  v.addEventListener('media-paused', () => { tab.audible = false; });
   v.addEventListener('found-in-page', (e) => {
     if (tab.id !== activeId) return;
     const r = e.result || {}; const c = $('find-count');
@@ -774,7 +825,7 @@ $('ws-new-input').addEventListener('keydown', (e) => {
 
 /* ---------- settings ---------- */
 const settings = $('settings');
-$('nav-settings').addEventListener('click', () => { settings.classList.remove('hidden'); collapseAllBlocks(); renderProviderSetting(); renderAdblockStatus(); renderTrusted(); renderDefaultBrowser(); renderAiSettings(); renderImport(); renderPasswordImport(); });
+$('nav-settings').addEventListener('click', () => { settings.classList.remove('hidden'); collapseAllBlocks(); renderProviderSetting(); renderAdblockStatus(); renderTrusted(); renderDefaultBrowser(); renderAiSettings(); renderImport(); renderPasswordImport(); renderPerf(); });
 function renderDefaultBrowser() {
   const st = $('default-browser-status'); if (!st || !window.materia.defaultBrowserStatus) return;
   window.materia.defaultBrowserStatus().then(s => {
@@ -1271,7 +1322,7 @@ function palCommands() {
   out.push({ ico: '★', title: 'Bookmark this page', sub: 'Ctrl+D', run: () => toggleBookmark() });
   out.push({ ico: '/', title: 'Toggle AI assistant', sub: 'Ctrl+J', run: () => { try { toggleAi(); } catch (_) {} } });
   if (typeof toggleReader === 'function') out.push({ ico: '☷', title: 'Reader mode', sub: 'F9', run: () => toggleReader() });
-  out.push({ ico: '⚙', title: 'Settings', run: () => { settings.classList.remove('hidden'); try { collapseAllBlocks(); renderProviderSetting(); renderAdblockStatus(); renderTrusted(); renderDefaultBrowser(); renderAiSettings(); renderImport(); renderPasswordImport(); } catch (_) {} } });
+  out.push({ ico: '⚙', title: 'Settings', run: () => { settings.classList.remove('hidden'); try { collapseAllBlocks(); renderProviderSetting(); renderAdblockStatus(); renderTrusted(); renderDefaultBrowser(); renderAiSettings(); renderImport(); renderPasswordImport(); renderPerf(); } catch (_) {} } });
   out.push({ ico: '✕', title: 'Close current tab', sub: 'Ctrl+W', run: () => { if (activeId) closeTab(activeId); } });
   wsTabs().forEach(t => { if (t.id !== activeId && !isNewtab(t.url)) out.push({ ico: '▢', title: t.title || palHost(t.url), sub: palHost(t.url), run: () => activateTab(t.id) }); });
   (workspaces || []).forEach(w => { if (w.id !== activeWsId) out.push({ ico: '◧', title: 'Go to workspace: ' + w.name, run: () => switchWorkspace(w.id) }); });

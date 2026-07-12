@@ -506,3 +506,9 @@ body.fullscreen #titlebar, body.fullscreen #toolbar, body.fullscreen #bookmarks,
 .pw-mini{ padding:4px 9px; border-radius:6px; border:1px solid var(--line); background:var(--bg); color:var(--ink-dim); cursor:pointer; font-size:11px; font-family:var(--ui) }
 .pw-mini:hover{ color:#f1cb53; border-color:rgba(241,203,83,.4) }
 .pw-del:hover{ color:#e0665c; border-color:rgba(224,102,92,.4) }
+
+/* a slept tab (RAM saver): dimmed until you click it, then it reloads */
+.tab.asleep{ opacity:.5 }
+.tab.asleep .tab-fav{ filter:grayscale(1) }
+.set-select{ background:var(--bg); color:var(--ink); border:1px solid var(--line); border-radius:6px; padding:6px 10px; font-family:var(--ui); font-size:12.5px; outline:none; cursor:pointer }
+.set-select:focus{ border-color:rgba(241,203,83,.5) }

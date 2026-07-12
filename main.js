@@ -829,6 +829,8 @@ ipcMain.on('view-create', (e, o) => {
     wc.on('did-navigate', () => send('did-navigate', { url: wc.getURL(), canBack: wc.navigationHistory.canGoBack(), canForward: wc.navigationHistory.canGoForward() }));
     wc.on('did-navigate-in-page', (e2, url, isMain) => { if (isMain) send('did-navigate-in-page', { url: wc.getURL(), canBack: wc.navigationHistory.canGoBack(), canForward: wc.navigationHistory.canGoForward() }); });
     wc.on('found-in-page', (e2, result) => send('found-in-page', { result: result }));
+    wc.on('media-started-playing', () => send('media-started-playing', {}));   // so RAM-saver never sleeps an audible tab
+    wc.on('media-paused', () => send('media-paused', {}));
     if (o.url) try { wc.loadURL(o.url).catch(() => {}); } catch (_) {}
   } catch (_) {}
 });

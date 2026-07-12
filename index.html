@@ -112,6 +112,30 @@
       </div>
 
       <div class="set-block">
+        <p class="set-heading">Performance</p>
+        <div class="set-row">
+          <div>
+            <p class="set-label">Sleep inactive tabs (RAM saver)</p>
+            <p class="set-note">Frees the memory of background tabs you have not touched in a while. They dim in the tab bar and reload instantly when clicked. Pinned tabs and tabs playing audio are never slept.</p>
+          </div>
+          <label class="switch"><input type="checkbox" id="toggle-ramsaver"><span class="slider"></span></label>
+        </div>
+        <div class="set-row" style="margin-top:1rem; align-items:center">
+          <div>
+            <p class="set-label">Sleep after</p>
+            <p class="set-note">How long a tab sits idle before it sleeps.</p>
+          </div>
+          <select id="sleep-after" class="set-select">
+            <option value="5">5 min</option>
+            <option value="10">10 min</option>
+            <option value="15">15 min</option>
+            <option value="30">30 min</option>
+            <option value="60">1 hour</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="set-block">
         <p class="set-heading">AI assistant</p>
         <p class="set-label" style="margin-bottom:6px">Default model</p>
         <div class="ai-set-seg" id="ai-set-provider">
