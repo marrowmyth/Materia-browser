@@ -50,7 +50,11 @@ function focusOmni() { try { omni.focus(); } catch (_) {} try { window.materia.f
 let workspaces = [];        // [{id, name}]
 let activeWsId = null;
 let IS_SECONDARY = false;   // a torn-off window: opens one URL, never persists its tab session
-let tabs = [];              // [{id, wsId, view, title, url, favicon, loading}]
+let tabs = [];              // [{id, wsId, view, title, url, favicon, loading, groupId}]
+let tabGroups = [];         // [{id, wsId, name, color, collapsed}] - collapsible folders in the tab strip
+const GROUP_COLORS = ['#f1cb53', '#4f93f2', '#e1554d', '#33d1bd', '#a96ff2', '#e0a93a'];
+function wsGroups() { return tabGroups.filter(g => g.wsId === activeWsId); }
+function loadTabGroups() { try { tabGroups = JSON.parse(localStorage.getItem('materia-tabgroups')) || []; } catch (_) { tabGroups = []; } }
 let activeId = null;        // currently shown tab (always inside activeWsId)
 let splitId = null;         // second pane in split view (null = single pane)
 let activeTabByWs = {};     // remembers each workspace's last-active tab
@@ -91,19 +95,21 @@ function saveWorkspaces() {
 let _saveTimer = null;
 function saveSession() { if (IS_SECONDARY) return; clearTimeout(_saveTimer); _saveTimer = setTimeout(_doSave, 400); }
 function _doSave() {
-  const live = tabs.map(t => ({ wsId: t.wsId, url: isNewtab(t.url) ? '' : t.url, active: activeTabByWs[t.wsId] === t.id, pinned: !!t.pinned }));
+  const live = tabs.map(t => ({ wsId: t.wsId, url: isNewtab(t.url) ? '' : t.url, active: activeTabByWs[t.wsId] === t.id, pinned: !!t.pinned, groupId: t.groupId || null }));
   const pend = [];
-  Object.keys(pendingByWs).forEach(ws => pendingByWs[ws].forEach(s => pend.push({ wsId: ws, url: s.url, active: s.active, pinned: s.pinned })));
+  Object.keys(pendingByWs).forEach(ws => pendingByWs[ws].forEach(s => pend.push({ wsId: ws, url: s.url, active: s.active, pinned: s.pinned, groupId: s.groupId || null })));
   try { localStorage.setItem('materia-tabs', JSON.stringify(live.concat(pend))); } catch (_) {}
+  try { localStorage.setItem('materia-tabgroups', JSON.stringify(tabGroups)); } catch (_) {}
 }
 function restoreSession() {
+  loadTabGroups();
   let saved = [];
   try { saved = JSON.parse(localStorage.getItem('materia-tabs')) || []; } catch (_) {}
   if (!saved.length) return false;
   const byWs = {};
   saved.forEach(s => { if (workspaces.some(w => w.id === s.wsId)) (byWs[s.wsId] = byWs[s.wsId] || []).push(s); });
   let activeTabId = null;
-  (byWs[activeWsId] || []).forEach(s => { const t = makeTab(activeWsId, s.url, s.pinned); if (s.active) activeTabId = t.id; });
+  (byWs[activeWsId] || []).forEach(s => { const t = makeTab(activeWsId, s.url, s.pinned); if (s.groupId) t.groupId = s.groupId; if (s.active) activeTabId = t.id; });
   delete byWs[activeWsId];
   pendingByWs = byWs;
   const mine = tabs.filter(t => t.wsId === activeWsId);
@@ -160,7 +166,7 @@ function makeTab(wsId, url, pinned) {
   const target = url || newtabUrl();
   ensureWs(wsId);
   const id = ++seq;
-  const tab = { id, wsId, title: 'New Tab', url: target, favicon: null, loading: false, pinned: !!pinned, lastActive: Date.now(), asleep: false, audible: false };
+  const tab = { id, wsId, title: 'New Tab', url: target, favicon: null, loading: false, pinned: !!pinned, lastActive: Date.now(), asleep: false, audible: false, groupId: null };
   viewState[id] = { url: target, canBack: false, canForward: false };
   tab.view = makeViewProxy(id);
   window.materia.viewCreate({ vid: id, wsId: wsId, partition: wsPartition(wsId), url: target });
@@ -240,45 +246,100 @@ function adoptTab(o) {
   return tab;
 }
 
-function renderTabs() {
-  tabsEl.innerHTML = '';
-  const list = wsTabs().slice().sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
-  list.forEach(t => {
-    const el = document.createElement('div');
-    el.className = 'tab' + (t.id === activeId ? ' active' : '') + (t.id === splitId ? ' split-mate' : '') + (t.pinned ? ' pinned' : '') + (t.asleep ? ' asleep' : '');
-    el.title = t.title;
-    const fav = document.createElement('img');
-    fav.className = 'tab-fav' + (t.favicon ? '' : ' placeholder');
-    if (t.favicon) fav.src = t.favicon;
-    el.appendChild(fav);
-    if (t.muted) { const mu = document.createElement('span'); mu.className = 'tab-mute'; mu.innerHTML = MUTE_SVG; el.appendChild(mu); }
-    if (!t.pinned) {
-      const title = document.createElement('span');
-      title.className = 'tab-title';
-      title.textContent = t.loading ? 'Loading…' : (t.title || 'New Tab');
-      const close = document.createElement('button');
-      close.className = 'tab-close'; close.textContent = '✕';
-      close.addEventListener('click', (e) => { e.stopPropagation(); closeTab(t.id); });
-      el.append(title, close);
+function makeTabEl(t) {
+  const el = document.createElement('div');
+  el.className = 'tab' + (t.id === activeId ? ' active' : '') + (t.id === splitId ? ' split-mate' : '') + (t.pinned ? ' pinned' : '') + (t.asleep ? ' asleep' : '');
+  el.title = t.title;
+  const fav = document.createElement('img');
+  fav.className = 'tab-fav' + (t.favicon ? '' : ' placeholder');
+  if (t.favicon) fav.src = t.favicon;
+  el.appendChild(fav);
+  if (t.muted) { const mu = document.createElement('span'); mu.className = 'tab-mute'; mu.innerHTML = MUTE_SVG; el.appendChild(mu); }
+  if (!t.pinned) {
+    const title = document.createElement('span');
+    title.className = 'tab-title';
+    title.textContent = t.loading ? 'Loading…' : (t.title || 'New Tab');
+    const close = document.createElement('button');
+    close.className = 'tab-close'; close.textContent = '✕';
+    close.addEventListener('click', (e) => { e.stopPropagation(); closeTab(t.id); });
+    el.append(title, close);
+  }
+  el.draggable = true;
+  el.addEventListener('click', () => activateTab(t.id));
+  el.addEventListener('auxclick', (e) => { if (e.button === 1) closeTab(t.id); });
+  el.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); showTabMenu(t, e.clientX, e.clientY); });
+  el.addEventListener('dragstart', (e) => { if (t.asleep) wakeTab(t); dragTabId = t.id; el.classList.add('dragging'); document.body.classList.add('tab-dragging'); applyChrome(); try { e.dataTransfer.effectAllowed = 'move'; } catch (_) {} });
+  el.addEventListener('dragend', (e) => {
+    el.classList.remove('dragging'); document.body.classList.remove('tab-dragging'); const torn = dragTabId; dragTabId = null; applyChrome();
+    // dropped outside this window's bounds → tear the tab into its own window
+    if (torn === t.id && (e.screenX || e.screenY)) {
+      const out = e.screenX < window.screenX || e.screenX > window.screenX + window.outerWidth || e.screenY < window.screenY || e.screenY > window.screenY + window.outerHeight;
+      if (out) { try { window.materia.tabMoveOut({ vid: t.id, xfer: newXfer(), url: t.url, title: t.title, wsId: t.wsId, x: e.screenX, y: e.screenY }); } catch (_) {} detachTab(t.id); }
     }
-    el.draggable = true;
-    el.addEventListener('click', () => activateTab(t.id));
-    el.addEventListener('auxclick', (e) => { if (e.button === 1) closeTab(t.id); });
-    el.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); showTabMenu(t, e.clientX, e.clientY); });
-    el.addEventListener('dragstart', (e) => { if (t.asleep) wakeTab(t); dragTabId = t.id; el.classList.add('dragging'); document.body.classList.add('tab-dragging'); applyChrome(); try { e.dataTransfer.effectAllowed = 'move'; } catch (_) {} });
-    el.addEventListener('dragend', (e) => {
-      el.classList.remove('dragging'); document.body.classList.remove('tab-dragging'); const torn = dragTabId; dragTabId = null; applyChrome();
-      // dropped outside this window's bounds → tear the tab into its own window
-      if (torn === t.id && (e.screenX || e.screenY)) {
-        const out = e.screenX < window.screenX || e.screenX > window.screenX + window.outerWidth || e.screenY < window.screenY || e.screenY > window.screenY + window.outerHeight;
-        if (out) { try { window.materia.tabMoveOut({ vid: t.id, xfer: newXfer(), url: t.url, title: t.title, wsId: t.wsId, x: e.screenX, y: e.screenY }); } catch (_) {} detachTab(t.id); }
-      }
-    });
-    el.addEventListener('dragover', (e) => { if (dragTabId && dragTabId !== t.id) { e.preventDefault(); el.classList.add('tab-drop'); } });
-    el.addEventListener('dragleave', () => el.classList.remove('tab-drop'));
-    el.addEventListener('drop', (e) => { e.preventDefault(); el.classList.remove('tab-drop'); if (dragTabId && dragTabId !== t.id) reorderTab(dragTabId, t.id); dragTabId = null; });
-    tabsEl.appendChild(el);
   });
+  el.addEventListener('dragover', (e) => { if (dragTabId && dragTabId !== t.id) { e.preventDefault(); el.classList.add('tab-drop'); } });
+  el.addEventListener('dragleave', () => el.classList.remove('tab-drop'));
+  el.addEventListener('drop', (e) => { e.preventDefault(); el.classList.remove('tab-drop'); if (dragTabId && dragTabId !== t.id) { const dt = tabs.find(x => x.id === dragTabId); if (dt && !dt.pinned) dt.groupId = t.groupId || null; reorderTab(dragTabId, t.id); } dragTabId = null; });
+  return el;
+}
+function makeGroupChip(g, count) {
+  const chip = document.createElement('div');
+  chip.className = 'tab-group-chip' + (g.collapsed ? ' collapsed' : '');
+  chip.dataset.gid = g.id;
+  chip.style.setProperty('--grp', g.color || '#f1cb53');
+  chip.title = g.name;
+  const dot = document.createElement('span'); dot.className = 'tgc-dot'; chip.appendChild(dot);
+  const nm = document.createElement('span'); nm.className = 'tgc-name'; nm.textContent = g.collapsed ? (g.name + ' · ' + count) : g.name; chip.appendChild(nm);
+  chip.addEventListener('click', () => { g.collapsed = !g.collapsed; renderTabs(); saveSession(); });
+  chip.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); showGroupMenu(g, e.clientX, e.clientY); });
+  chip.addEventListener('dragover', (e) => { if (dragTabId) { e.preventDefault(); chip.classList.add('tab-drop'); } });
+  chip.addEventListener('dragleave', () => chip.classList.remove('tab-drop'));
+  chip.addEventListener('drop', (e) => { e.preventDefault(); chip.classList.remove('tab-drop'); const dt = dragTabId && tabs.find(x => x.id === dragTabId); if (dt && !dt.pinned) { dt.groupId = g.id; renderTabs(); saveSession(); } dragTabId = null; });
+  return chip;
+}
+function renderTabs() {
+  tabGroups = tabGroups.filter(g => tabs.some(t => t.groupId === g.id));   // drop groups with no tabs
+  tabsEl.innerHTML = '';
+  const all = wsTabs().slice();
+  all.filter(t => t.pinned).forEach(t => tabsEl.appendChild(makeTabEl(t)));
+  const unpinned = all.filter(t => !t.pinned);
+  const emitted = new Set();
+  unpinned.forEach(t => {
+    const g = t.groupId ? tabGroups.find(x => x.id === t.groupId && x.wsId === activeWsId) : null;
+    if (!g) { if (t.groupId) t.groupId = null; tabsEl.appendChild(makeTabEl(t)); return; }
+    if (emitted.has(g.id)) return;
+    emitted.add(g.id);
+    const members = unpinned.filter(x => x.groupId === g.id);
+    tabsEl.appendChild(makeGroupChip(g, members.length));
+    if (!g.collapsed) members.forEach(m => { const el = makeTabEl(m); el.classList.add('grouped'); el.style.setProperty('--grp', g.color || '#f1cb53'); tabsEl.appendChild(el); });
+  });
+}
+function newGroupFromTab(t) {
+  const color = GROUP_COLORS[tabGroups.length % GROUP_COLORS.length];
+  const g = { id: 'g' + (++seq), wsId: activeWsId, name: 'New group', color: color, collapsed: false };
+  tabGroups.push(g); t.groupId = g.id;
+  renderTabs(); saveSession(); renameGroup(g);
+}
+function renameGroup(g) {
+  const chip = tabsEl.querySelector('.tab-group-chip[data-gid="' + g.id + '"]'); if (!chip) return;
+  const nm = chip.querySelector('.tgc-name'); if (!nm) return;
+  const inp = document.createElement('input'); inp.className = 'tgc-input'; inp.value = g.name; inp.maxLength = 24;
+  inp.addEventListener('click', (e) => e.stopPropagation());
+  nm.replaceWith(inp); inp.focus(); inp.select();
+  let done = false;
+  const finish = (keep) => { if (done) return; done = true; if (keep) g.name = inp.value.trim() || g.name; renderTabs(); saveSession(); };
+  inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); finish(true); } else if (e.key === 'Escape') { finish(false); } });
+  inp.addEventListener('blur', () => finish(true));
+}
+function showGroupMenu(g, x, y) {
+  showMenu([
+    { label: g.collapsed ? 'Expand group' : 'Collapse group', fn: () => { g.collapsed = !g.collapsed; renderTabs(); saveSession(); } },
+    { label: 'Rename group', fn: () => renameGroup(g) },
+    { label: 'Change color', fn: () => { const i = GROUP_COLORS.indexOf(g.color); g.color = GROUP_COLORS[(i + 1) % GROUP_COLORS.length]; renderTabs(); saveSession(); } },
+    { label: 'New tab in group', fn: () => { const t = createTab(); t.groupId = g.id; renderTabs(); saveSession(); } },
+    { label: 'Ungroup tabs', fn: () => { wsTabs().forEach(t => { if (t.groupId === g.id) t.groupId = null; }); renderTabs(); saveSession(); } },
+    { label: 'Close group', fn: () => { wsTabs().filter(t => t.groupId === g.id).map(t => t.id).forEach(closeTab); renderTabs(); saveSession(); } }
+  ], x, y);
 }
 
 /* ---------- split view (two panes side by side in the same window) ---------- */
@@ -414,6 +475,13 @@ function showTabMenu(t, x, y) {
     { label: splitId ? 'Open in split (replace pane)' : 'Open in split view', fn: () => openInSplit(t.id) }
   ];
   if (splitId) items.push({ label: 'Exit split view', fn: exitSplit });
+  if (!t.pinned) {
+    if (t.groupId) items.push({ label: 'Remove from group', fn: () => { t.groupId = null; renderTabs(); saveSession(); } });
+    else {
+      items.push({ label: 'Add tab to new group', fn: () => newGroupFromTab(t) });
+      wsGroups().forEach(g => items.push({ label: 'Add to group: ' + g.name, fn: () => { t.groupId = g.id; renderTabs(); saveSession(); } }));
+    }
+  }
   items.push(
     { label: 'New tab', fn: () => createTab() },
     { label: 'Duplicate tab', fn: () => createTab(t.url) },
@@ -746,7 +814,7 @@ function switchWorkspace(id) {
   if (pendingByWs[id]) {
     const list = pendingByWs[id]; delete pendingByWs[id];
     let act = null;
-    list.forEach(s => { const t = makeTab(id, s.url, s.pinned); if (s.active) act = t.id; });
+    list.forEach(s => { const t = makeTab(id, s.url, s.pinned); if (s.groupId) t.groupId = s.groupId; if (s.active) act = t.id; });
     if (act) activeTabByWs[id] = act;
   }
   const mine = tabs.filter(t => t.wsId === id);
@@ -1166,6 +1234,7 @@ function updateStar() {
 }
 $('bm-star').addEventListener('click', toggleBookmark);
 $('bm-list').addEventListener('contextmenu', (e) => { e.preventDefault(); showAddMenu(e.clientX, e.clientY); });
+{ const _ba = $('bm-add'); if (_ba) _ba.addEventListener('click', () => { const r = _ba.getBoundingClientRect(); showAddMenu(r.left, r.bottom + 4); }); }
 $('bm-list').addEventListener('dragover', (e) => { if (dragBm) e.preventDefault(); });
 $('bm-list').addEventListener('drop', (e) => { e.preventDefault(); if (dragBm) { removeBmAnywhere(dragBm); wsBookmarks().push(dragBm); saveBookmarks(); renderBookmarks(); if ($('folder-pop')) $('folder-pop').classList.remove('open'); } dragBm = null; });
 
@@ -1881,6 +1950,7 @@ loadWorkspaces();
 const _mmQ = new URLSearchParams(location.search); const _mmTornUrl = _mmQ.get('u'); const _mmNew = _mmQ.get('nw'); const _mmAdopt = _mmQ.get('ad');   // torn-off / new window (nw = blank) / ad = adopt a live moved tab
 if (_mmTornUrl || _mmNew || _mmAdopt) { IS_SECONDARY = true; const ws = _mmQ.get('ws'); if (ws && workspaces.some(w => w.id === ws)) activeWsId = ws; }
 loadBookmarks();
+loadTabGroups();
 loadSocialLinks();
 loadHistory();
 loadDownloads();
