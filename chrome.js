@@ -95,9 +95,9 @@ function saveWorkspaces() {
 let _saveTimer = null;
 function saveSession() { if (IS_SECONDARY) return; clearTimeout(_saveTimer); _saveTimer = setTimeout(_doSave, 400); }
 function _doSave() {
-  const live = tabs.map(t => ({ wsId: t.wsId, url: isNewtab(t.url) ? '' : t.url, active: activeTabByWs[t.wsId] === t.id, pinned: !!t.pinned, groupId: t.groupId || null }));
+  const live = tabs.map(t => ({ wsId: t.wsId, url: isNewtab(t.url) ? '' : t.url, active: activeTabByWs[t.wsId] === t.id, pinned: !!t.pinned, groupId: t.groupId || null, noSleep: !!t.noSleep }));
   const pend = [];
-  Object.keys(pendingByWs).forEach(ws => pendingByWs[ws].forEach(s => pend.push({ wsId: ws, url: s.url, active: s.active, pinned: s.pinned, groupId: s.groupId || null })));
+  Object.keys(pendingByWs).forEach(ws => pendingByWs[ws].forEach(s => pend.push({ wsId: ws, url: s.url, active: s.active, pinned: s.pinned, groupId: s.groupId || null, noSleep: s.noSleep })));
   try { localStorage.setItem('materia-tabs', JSON.stringify(live.concat(pend))); } catch (_) {}
   try { localStorage.setItem('materia-tabgroups', JSON.stringify(tabGroups)); } catch (_) {}
 }
@@ -109,7 +109,7 @@ function restoreSession() {
   const byWs = {};
   saved.forEach(s => { if (workspaces.some(w => w.id === s.wsId)) (byWs[s.wsId] = byWs[s.wsId] || []).push(s); });
   let activeTabId = null;
-  (byWs[activeWsId] || []).forEach(s => { const t = makeTab(activeWsId, s.url, s.pinned); if (s.groupId) t.groupId = s.groupId; if (s.active) activeTabId = t.id; });
+  (byWs[activeWsId] || []).forEach(s => { const t = makeTab(activeWsId, s.url, s.pinned); if (s.groupId) t.groupId = s.groupId; if (s.noSleep) t.noSleep = true; if (s.active) activeTabId = t.id; });
   delete byWs[activeWsId];
   pendingByWs = byWs;
   const mine = tabs.filter(t => t.wsId === activeWsId);
@@ -166,7 +166,7 @@ function makeTab(wsId, url, pinned) {
   const target = url || newtabUrl();
   ensureWs(wsId);
   const id = ++seq;
-  const tab = { id, wsId, title: 'New Tab', url: target, favicon: null, loading: false, pinned: !!pinned, lastActive: Date.now(), asleep: false, audible: false, groupId: null };
+  const tab = { id, wsId, title: 'New Tab', url: target, favicon: null, loading: false, pinned: !!pinned, lastActive: Date.now(), asleep: false, audible: false, groupId: null, noSleep: false };
   viewState[id] = { url: target, canBack: false, canForward: false };
   tab.view = makeViewProxy(id);
   window.materia.viewCreate({ vid: id, wsId: wsId, partition: wsPartition(wsId), url: target });
@@ -248,8 +248,8 @@ function adoptTab(o) {
 
 function makeTabEl(t) {
   const el = document.createElement('div');
-  el.className = 'tab' + (t.id === activeId ? ' active' : '') + (t.id === splitId ? ' split-mate' : '') + (t.pinned ? ' pinned' : '') + (t.asleep ? ' asleep' : '');
-  el.title = t.title;
+  el.className = 'tab' + (t.id === activeId ? ' active' : '') + (t.id === splitId ? ' split-mate' : '') + (t.pinned ? ' pinned' : '') + (t.asleep ? ' asleep' : '') + (t.noSleep ? ' keep-awake' : '');
+  el.title = t.noSleep ? (t.title + ' (kept awake)') : t.title;
   const fav = document.createElement('img');
   fav.className = 'tab-fav' + (t.favicon ? '' : ' placeholder');
   if (t.favicon) fav.src = t.favicon;
@@ -420,8 +420,9 @@ let ramSaver = (localStorage.getItem('materia-ramsaver') || '1') === '1';   // d
 let sleepAfterMin = parseInt(localStorage.getItem('materia-sleep-min') || '15', 10) || 15;
 let sleepTimer = null;
 function sleepEligible(t) {
-  return t && !t.asleep && t.id !== activeId && t.id !== splitId && !t.pinned && !t.audible && !isNewtab(t.url) && !t.loading;
+  return t && !t.asleep && t.id !== activeId && t.id !== splitId && !t.pinned && !t.noSleep && !t.audible && !isNewtab(t.url) && !t.loading;
 }
+function toggleNoSleep(t) { t.noSleep = !t.noSleep; if (t.noSleep && t.asleep) wakeTab(t); renderTabs(); saveSession(); }
 function sleepTab(t) {
   if (!sleepEligible(t)) return;
   t._wakeUrl = (t.view && t.view.getURL && t.view.getURL()) || t.url;
@@ -472,6 +473,7 @@ function showTabMenu(t, x, y) {
   const items = [
     { label: t.pinned ? 'Unpin tab' : 'Pin tab', fn: () => togglePin(t) },
     { label: t.muted ? 'Unmute tab' : 'Mute tab', fn: () => toggleMute(t) },
+    { label: t.noSleep ? 'Allow sleeping' : 'Keep awake (never sleep)', fn: () => toggleNoSleep(t) },
     { label: splitId ? 'Open in split (replace pane)' : 'Open in split view', fn: () => openInSplit(t.id) }
   ];
   if (splitId) items.push({ label: 'Exit split view', fn: exitSplit });
@@ -814,7 +816,7 @@ function switchWorkspace(id) {
   if (pendingByWs[id]) {
     const list = pendingByWs[id]; delete pendingByWs[id];
     let act = null;
-    list.forEach(s => { const t = makeTab(id, s.url, s.pinned); if (s.groupId) t.groupId = s.groupId; if (s.active) act = t.id; });
+    list.forEach(s => { const t = makeTab(id, s.url, s.pinned); if (s.groupId) t.groupId = s.groupId; if (s.noSleep) t.noSleep = true; if (s.active) act = t.id; });
     if (act) activeTabByWs[id] = act;
   }
   const mine = tabs.filter(t => t.wsId === id);

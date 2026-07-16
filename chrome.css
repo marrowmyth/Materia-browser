@@ -510,6 +510,8 @@ body.fullscreen #titlebar, body.fullscreen #toolbar, body.fullscreen #bookmarks,
 /* a slept tab (RAM saver): dimmed until you click it, then it reloads */
 .tab.asleep{ opacity:.5 }
 .tab.asleep .tab-fav{ filter:grayscale(1) }
+/* kept-awake tab (never sleeps): a small accent ring on the favicon */
+.tab.keep-awake .tab-fav{ box-shadow:0 0 0 2px var(--teal); border-radius:4px }
 .set-select{ background:var(--bg); color:var(--ink); border:1px solid var(--line); border-radius:6px; padding:6px 10px; font-family:var(--ui); font-size:12.5px; outline:none; cursor:pointer }
 .set-select:focus{ border-color:rgba(241,203,83,.5) }
 

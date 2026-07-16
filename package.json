@@ -1,6 +1,6 @@
 {
   "name": "materia-browser",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "Slash Browser, a privacy-hardened, AI-native, MarrowMyth-skinned Chromium browser.",
   "author": "F.C. Marrow / MarrowMyth",
   "main": "main.js",
