@@ -118,6 +118,7 @@ function makeViewProxy(vid) {
     _emit: (ev, payload) => { (L[ev] || []).forEach(fn => { try { fn(payload); } catch (_) {} }); },
     loadURL: (u) => window.materia.viewNav({ vid: vid, action: 'load', url: u }),
     reload: () => window.materia.viewNav({ vid: vid, action: 'reload' }),
+    reloadIgnoringCache: () => window.materia.viewNav({ vid: vid, action: 'hardreload' }),
     goBack: () => window.materia.viewNav({ vid: vid, action: 'back' }),
     goForward: () => window.materia.viewNav({ vid: vid, action: 'forward' }),
     canGoBack: () => !!(viewState[vid] && viewState[vid].canBack),
@@ -1209,7 +1210,34 @@ let scaleWithWindow = localStorage.getItem('materia-scalewin') === '1';
 function windowScale() { return scaleWithWindow ? Math.max(0.6, Math.min(1.6, window.innerWidth / 1366)) : 1; }
 function effectiveZoom() { return Math.round(pageZoom * windowScale() * 100) / 100; }
 function applyZoom() { const z = effectiveZoom(); tabs.forEach(t => { try { t.view.setZoomFactor(z); } catch (_) {} }); }
-function setZoom(z) { pageZoom = Math.max(0.3, Math.min(3, Math.round(z * 100) / 100)); localStorage.setItem('materia-zoom', String(pageZoom)); applyZoom(); showMini('Zoom ' + Math.round(effectiveZoom() * 100) + '%'); }   // report the zoom pages actually render at (incl. window scaling)
+// Chrome-style zoom badge injected INTO the page being zoomed. The chrome's own toast lives in the chrome
+// view, which is z-ordered BEHIND the page view exactly when the pointer is over a page — i.e. during
+// ctrl+wheel — so a chrome-side toast can't be trusted to be visible. The page itself is always the top
+// layer under the cursor. Built with DOM APIs + inline style properties only (CSP/Trusted-Types safe).
+function zoomBubbleJS(pct) {
+  return '(function(){try{var d=document,b=d.getElementById("__mm_zoom");'
+    + 'if(!b){b=d.createElement("div");b.id="__mm_zoom";'
+    + 'b.style.cssText="position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:2147483647;'
+    + 'background:rgba(8,20,24,.92);color:#dff5f1;border:1px solid rgba(51,209,189,.5);border-radius:18px;'
+    + 'padding:8px 18px;font:600 13px/1 system-ui,\'Segoe UI\',sans-serif;box-shadow:0 8px 26px rgba(0,0,0,.45);'
+    + 'pointer-events:none;opacity:0;transition:opacity .12s";'
+    + '(d.body||d.documentElement).appendChild(b);}'
+    + 'b.textContent=' + JSON.stringify(pct + '%') + ';b.style.opacity="1";'
+    + 'clearTimeout(b.__t);b.__t=setTimeout(function(){b.style.opacity="0";setTimeout(function(){try{b.remove()}catch(_){}},160);},1200);'
+    + 'return 1}catch(e){return 0}})();';
+}
+function setZoom(z) {
+  pageZoom = Math.max(0.3, Math.min(3, Math.round(z * 100) / 100));
+  localStorage.setItem('materia-zoom', String(pageZoom));
+  applyZoom();
+  const pct = Math.round(effectiveZoom() * 100);   // the zoom pages actually render at (incl. window scaling)
+  const t = activeTab();
+  if (t && !t.asleep) {
+    t.view.executeJavaScript(zoomBubbleJS(pct), true)
+      .then((r) => { if (r !== 1) showMini('Zoom ' + pct + '%'); })    // page can't host the badge (PDF viewer etc.) → chrome-strip toast
+      .catch(() => showMini('Zoom ' + pct + '%'));
+  } else showMini('Zoom ' + pct + '%');
+}
 let _zrt = null;
 window.addEventListener('resize', () => { clearTimeout(_zrt); _zrt = setTimeout(applyZoom, 120); });
 window.addEventListener('wheel', (e) => { if (e.ctrlKey) { e.preventDefault(); setZoom(pageZoom + (e.deltaY < 0 ? 0.1 : -0.1)); } }, { passive: false });
@@ -1305,6 +1333,7 @@ function handleShortcut(cmd) {
   else if (cmd === 'closetab') { if (activeId) closeTab(activeId); }
   else if (cmd === 'focusomni') focusOmni();
   else if (cmd === 'reload') { const t = activeTab(); if (t) t.view.reload(); }
+  else if (cmd === 'hardreload') { const t = activeTab(); if (t) t.view.reloadIgnoringCache(); }
   else if (cmd === 'find') showFind();
   else if (cmd === 'reopentab') reopenClosed();
   else if (cmd === 'fullscreen') { try { window.materia.toggleFullscreen(); } catch (_) {} }
@@ -1327,6 +1356,7 @@ window.addEventListener('keydown', (e) => {
   else if (ctrl && k.toLowerCase() === 't') { e.preventDefault(); handleShortcut('newtab'); }
   else if (ctrl && k.toLowerCase() === 'w') { e.preventDefault(); handleShortcut('closetab'); }
   else if (ctrl && k.toLowerCase() === 'l') { e.preventDefault(); handleShortcut('focusomni'); }
+  else if (ctrl && e.shiftKey && k.toLowerCase() === 'r') { e.preventDefault(); handleShortcut('hardreload'); }
   else if (ctrl && k.toLowerCase() === 'r') { e.preventDefault(); handleShortcut('reload'); }
   else if (ctrl && k.toLowerCase() === 'f') { e.preventDefault(); handleShortcut('find'); }
   else if (ctrl && k.toLowerCase() === 'd') { e.preventDefault(); handleShortcut('bookmark'); }

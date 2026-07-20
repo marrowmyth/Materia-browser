@@ -536,6 +536,7 @@ function popupContextMenu(wc, params) {
   items.push({ label: 'Back', enabled: wc.navigationHistory.canGoBack(), click: () => wc.navigationHistory.goBack() });
   items.push({ label: 'Forward', enabled: wc.navigationHistory.canGoForward(), click: () => wc.navigationHistory.goForward() });
   items.push({ label: 'Reload', click: () => wc.reload() });
+  items.push({ label: 'Hard Reload', click: () => wc.reloadIgnoringCache() });
   items.push({ label: 'Remove page overlays', click: () => { try { wc.executeJavaScript(OVERLAY_REMOVER_JS).catch(function(){}); } catch (_) {} } });
   const trustHost = hostOf(wc.getURL());
   if (trustHost) {
@@ -599,6 +600,7 @@ function wireGuest(wc, ownerWin) {
     let cmd = null;
     if (k === 'F11') cmd = 'fullscreen';
     else if (ctrl && input.shift && k.toLowerCase() === 't') cmd = 'reopentab';
+    else if (ctrl && input.shift && k.toLowerCase() === 'r') cmd = 'hardreload';
     else if (ctrl && k === 'Tab') cmd = 'nexttab';
     else if (ctrl && /^[1-9]$/.test(k)) cmd = 'tab' + k;
     else if (ctrl) { const m = { t: 'newtab', w: 'closetab', l: 'focusomni', r: 'reload', f: 'find', d: 'bookmark', p: 'print', '=': 'zoomin', '+': 'zoomin', '-': 'zoomout', '0': 'zoomreset' }; cmd = m[k.toLowerCase()]; }
@@ -691,7 +693,7 @@ ipcMain.on('view-adopt', (e, d) => {
     try { const ti = wc.getTitle(); if (ti) csend(w, 'view-event', { vid: d.vid, event: 'page-title-updated', payload: { title: ti } }); } catch (_) {}
   } catch (_) {}
 });
-ipcMain.on('view-nav', (e, d) => { const v = gResolve(e, d.vid); if (!v) return; const wc = v.webContents; try { if (d.action === 'load') wc.loadURL(d.url).catch(() => {}); else if (d.action === 'reload') wc.reload(); else if (d.action === 'back') { if (wc.navigationHistory.canGoBack()) wc.navigationHistory.goBack(); } else if (d.action === 'forward') { if (wc.navigationHistory.canGoForward()) wc.navigationHistory.goForward(); } } catch (_) {} });
+ipcMain.on('view-nav', (e, d) => { const v = gResolve(e, d.vid); if (!v) return; const wc = v.webContents; try { if (d.action === 'load') wc.loadURL(d.url).catch(() => {}); else if (d.action === 'reload') wc.reload(); else if (d.action === 'hardreload') wc.reloadIgnoringCache(); else if (d.action === 'back') { if (wc.navigationHistory.canGoBack()) wc.navigationHistory.goBack(); } else if (d.action === 'forward') { if (wc.navigationHistory.canGoForward()) wc.navigationHistory.goForward(); } } catch (_) {} });
 ipcMain.on('view-zoom', (e, d) => { const v = gResolve(e, d.vid); if (v) try { v.webContents.setZoomFactor(d.factor); } catch (_) {} });
 ipcMain.on('view-mute', (e, d) => { const v = gResolve(e, d.vid); if (v) try { v.webContents.setAudioMuted(!!d.muted); } catch (_) {} });
 ipcMain.on('view-find', (e, d) => { const v = gResolve(e, d.vid); if (v) try { if (d.action === 'find') v.webContents.findInPage(d.text, d.opts || {}); else v.webContents.stopFindInPage(d.arg || 'clearSelection'); } catch (_) {} });
