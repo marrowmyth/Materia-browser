@@ -17,6 +17,8 @@ contextBridge.exposeInMainWorld('materia', {
   onShortcut: (cb) => ipcRenderer.on('shortcut', (e, c) => cb(c)),
   onZoomWheel: (cb) => ipcRenderer.on('zoom-wheel', (e, dir) => cb(dir)),
   onDownload: (cb) => ipcRenderer.on('download', (e, d) => cb(d)),
+  cancelDownload: (id) => ipcRenderer.send('dl-cancel', id),
+  ytdlpCancel: (id) => ipcRenderer.send('ytdlp-cancel', id),
   openPath: (p) => ipcRenderer.invoke('open-path', p),
   showItem: (p) => ipcRenderer.invoke('show-item', p),
   getDlDirs: () => ipcRenderer.invoke('get-dl-dirs'),

@@ -168,6 +168,9 @@ function adWouldBlock(url, sourceUrl) {
   } catch (_) { return false; }
 }
 
+// live DownloadItems by shelf id, so the renderer's Cancel button can reach them
+const dlItems = new Map();
+ipcMain.on('dl-cancel', (e, id) => { const it = dlItems.get(id); if (it) { try { it.cancel(); } catch (_) {} } });   // cancel fires 'done' with state 'cancelled' → renderer updates from that event
 function dlCategory(name) {
   const ext = (String(name).split('.').pop() || '').toLowerCase();
   if (['mp4', 'mkv', 'webm', 'mov', 'avi', 'm4v', 'flv', 'wmv', 'mpg', 'mpeg'].indexOf(ext) >= 0) return 'video';
@@ -292,10 +295,11 @@ function configurePartition(partition) {
     try { item.setSavePath(savePath); } catch (_) {}
     const id = 'd' + Date.now() + Math.floor(Math.random() * 1000);
     const url = item.getURL();
+    dlItems.set(id, item);   // kept live so 'dl-cancel' can reach it
     const send = (state) => { if (win) csend(win, 'download', { id, name: item.getFilename(), url, path: savePath, state, received: item.getReceivedBytes(), total: item.getTotalBytes() }); };
     send('progress');
     item.on('updated', (ev, st) => send(st === 'interrupted' ? 'interrupted' : 'progress'));
-    item.once('done', (ev, st) => send(st));
+    item.once('done', (ev, st) => { dlItems.delete(id); send(st); });
   });
 
   return ses;   // ad/tracker blocking is applied manually in onBeforeRequest (above) so the trusted-site allowlist can override it
@@ -936,6 +940,16 @@ async function cookieFileFor(url) {
 }
 
 let _vdSeq = 0;
+const vdChildren = new Map();   // ytdlp id -> child process, so the shelf's Cancel can kill it
+ipcMain.on('ytdlp-cancel', (e, id) => {
+  const c = vdChildren.get(id); if (!c) return;
+  c.__cancelled = true;
+  try {
+    // yt-dlp spawns ffmpeg for the merge — kill the whole tree or the merge keeps running headless
+    if (process.platform === 'win32') spawn('taskkill', ['/pid', String(c.pid), '/T', '/F'], { windowsHide: true });
+    else c.kill('SIGKILL');
+  } catch (_) {}
+});
 ipcMain.handle('ytdlp-download', async (e, url, quality) => {
   url = String(url || '').trim();
   if (!/^https?:/i.test(url)) return { ok: false, error: 'Enter a valid URL' };
@@ -959,6 +973,7 @@ ipcMain.handle('ytdlp-download', async (e, url, quality) => {
   if (quality !== 'audio') args.push('--merge-output-format', 'mp4');
   args.push(url);
   const child = spawn(ytDlpPath(), args, { env: Object.assign({}, process.env, { ELECTRON_RUN_AS_NODE: '1' }) });
+  vdChildren.set(id, child);
   let lastPct = 0, errTail = '', lastEmit = 0;
   const onData = (d) => {
     const s = d.toString();
@@ -971,8 +986,8 @@ ipcMain.handle('ytdlp-download', async (e, url, quality) => {
   };
   child.stdout.on('data', onData);
   child.stderr.on('data', onData);
-  child.on('error', () => { if (win) csend(win, 'ytdlp-progress', { id, done: true, ok: false, error: 'Could not start yt-dlp' }); });
-  child.on('close', (code) => { try { if (ck) fs.unlinkSync(ck); } catch (_) {} if (win) csend(win, 'ytdlp-progress', { id, pct: code === 0 ? 100 : lastPct, done: true, ok: code === 0, error: code === 0 ? null : (errTail || 'Download failed') }); });
+  child.on('error', () => { vdChildren.delete(id); if (win) csend(win, 'ytdlp-progress', { id, done: true, ok: false, error: 'Could not start yt-dlp' }); });
+  child.on('close', (code) => { vdChildren.delete(id); try { if (ck) fs.unlinkSync(ck); } catch (_) {} if (win) csend(win, 'ytdlp-progress', { id, pct: code === 0 ? 100 : lastPct, done: true, ok: code === 0, cancelled: !!child.__cancelled, error: code === 0 ? null : (child.__cancelled ? 'Cancelled' : (errTail || 'Download failed')) }); });
   return { ok: true, id };
 });
 // sync read for the webview preload's anti-flash dark background (runs at document-start)

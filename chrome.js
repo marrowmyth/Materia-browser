@@ -545,7 +545,7 @@ window.materia.onYtdlpProgress((p) => {
   if (p.done) {
     const fail = p.error || 'Failed — check the link';
     if (st) st.textContent = p.ok ? '✓ Saved to your Videos folder' : fail;
-    if (window._dlShelf) window._dlShelf.update(fid, { name: 'Video download', state: p.ok ? 'done' : 'failed', pct: p.ok ? 100 : undefined });
+    if (window._dlShelf) window._dlShelf.update(fid, { name: 'Video download', state: p.ok ? 'done' : (p.cancelled ? 'cancelled' : 'failed'), pct: p.ok ? 100 : undefined });
   } else {
     if (st) st.textContent = p.line || 'Downloading…';
     const patch = { name: 'Video download', state: 'progress' };
@@ -565,9 +565,9 @@ window.materia.onYtdlpProgress((p) => {
     if (!items.size) { bar.classList.add('hidden'); if (was) try { layoutViews(); } catch (_) {} return; }
     items.forEach((it, id) => {
       const row = document.createElement('div');
-      row.className = 'dl-row' + (it.state === 'done' ? ' done' : it.state === 'failed' ? ' failed' : '');
+      row.className = 'dl-row' + (it.state === 'done' ? ' done' : (it.state === 'failed' || it.state === 'cancelled') ? ' failed' : '');
       const ico = document.createElement('span'); ico.className = 'dl-ico';
-      ico.textContent = it.state === 'done' ? '✓' : it.state === 'failed' ? '✕' : '↓'; row.appendChild(ico);
+      ico.textContent = it.state === 'done' ? '✓' : it.state === 'progress' ? '↓' : '✕'; row.appendChild(ico);
       const name = document.createElement('span'); name.className = 'dl-name'; name.textContent = it.name || 'Download'; name.title = it.name || ''; row.appendChild(name);
       const bw = document.createElement('span'); bw.className = 'dl-bar';
       if (it.state === 'progress') { const i = document.createElement('i'); i.style.width = (it.pct != null ? Math.max(2, Math.min(100, it.pct)) : 4) + '%'; bw.appendChild(i); }
@@ -576,12 +576,18 @@ window.materia.onYtdlpProgress((p) => {
       const pc = document.createElement('span'); pc.className = 'dl-pct';
       if (it.state === 'progress') pc.textContent = it.pct != null ? Math.round(it.pct) + '%' : '…';
       else if (it.state === 'failed') pc.textContent = 'Failed';
+      else if (it.state === 'cancelled') pc.textContent = 'Cancelled';
       else if (it.openable) {
         const o = document.createElement('span'); o.className = 'dl-act'; o.textContent = 'Open'; o.onclick = () => { try { window.materia.openPath(it.path); } catch (_) {} }; pc.appendChild(o);
         const f = document.createElement('span'); f.className = 'dl-act'; f.textContent = 'Folder'; f.onclick = () => { try { window.materia.showItem(it.path); } catch (_) {} }; pc.appendChild(f);
       } else pc.textContent = '✓ Done';
       row.appendChild(pc);
-      const x = document.createElement('span'); x.className = 'dl-x'; x.textContent = '×'; x.title = 'Dismiss'; x.onclick = () => { items.delete(id); render(); }; row.appendChild(x);
+      const x = document.createElement('span'); x.className = 'dl-x'; x.textContent = '×';
+      if (it.state === 'progress') {   // live download → ✕ CANCELS it (the cancelled event updates the row); finished rows just dismiss
+        x.title = 'Cancel download';
+        x.onclick = () => { try { if (String(id).indexOf('yt-') === 0) window.materia.ytdlpCancel(String(id).slice(3)); else window.materia.cancelDownload(id); } catch (_) {} };
+      } else { x.title = 'Dismiss'; x.onclick = () => { items.delete(id); render(); }; }
+      row.appendChild(x);
       bar.appendChild(row);
     });
     bar.classList.remove('hidden');
@@ -596,7 +602,8 @@ window.materia.onYtdlpProgress((p) => {
     if (d.total > 0) it.pct = d.received / d.total * 100;
     if (d.path) it.path = d.path;
     if (d.state === 'completed') { it.state = 'done'; it.pct = 100; it.openable = !!it.path; }
-    else if (d.state === 'interrupted' || d.state === 'cancelled' || d.state === 'failed') it.state = 'failed';
+    else if (d.state === 'cancelled') it.state = 'cancelled';
+    else if (d.state === 'interrupted' || d.state === 'failed') it.state = 'failed';
     else it.state = 'progress';
     items.set(d.id, it);
     render();
@@ -1434,6 +1441,7 @@ function renderDownloads() {
     else sub.textContent = d.state || '';
     row.append(tt, sub);
     if (d.state === 'completed') { row.classList.add('done'); row.title = 'Open · right-click to show in folder'; row.addEventListener('click', () => window.materia.openPath(d.path)); row.addEventListener('contextmenu', (e) => { e.preventDefault(); window.materia.showItem(d.path); }); }
+    else if (d.state === 'progress') { const c = document.createElement('button'); c.className = 'dl-dir-btn'; c.textContent = 'Cancel'; c.addEventListener('click', (ev) => { ev.stopPropagation(); window.materia.cancelDownload(d.id); }); row.appendChild(c); }
     box.appendChild(row);
   });
 }
